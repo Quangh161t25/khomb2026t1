@@ -2057,10 +2057,9 @@
 
             if (isEditing) {
                 editingRowIndex = editIndex;
+                isAddingNewRow = false;
             } else {
-                if (isAddingNewRow || editingRowIndex !== null) {
-                    return alert("Vui lòng hoàn tất dòng đang sửa trước.");
-                }
+                editingRowIndex = null;
                 isAddingNewRow = true;
             }
 
