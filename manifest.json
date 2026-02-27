@@ -1,0 +1,21 @@
+{
+  "name": "Quản Lý Kho HH",
+  "short_name": "Kho HH",
+  "description": "Hệ thống quản lý xuất nhập kho Google Sheets thông minh.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#10b981",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
