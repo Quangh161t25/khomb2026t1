@@ -913,6 +913,26 @@
             cursor: pointer;
             accent-color: var(--primary);
         }
+
+        /* Copy MVD button */
+        .btn-copy-mvd {
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--primary);
+            border: none;
+            padding: 4px 6px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 6px;
+            font-size: 0.75rem;
+            display: inline-flex;
+            align-items: center;
+            transition: all 0.2s;
+        }
+
+        .btn-copy-mvd:hover {
+            background: var(--primary);
+            color: white;
+        }
     </style>
 </head>
 
@@ -1300,6 +1320,27 @@
             }
         }
 
+        function copyToClipboard(text) {
+            if (!text) return;
+            navigator.clipboard.writeText(text).then(() => {
+                const toast = document.createElement('div');
+                toast.style = "position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.8); color:white; padding:8px 16px; border-radius:30px; z-index:9999; font-size:14px;";
+                toast.textContent = "Đã sao chép: " + text;
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 2000);
+            }).catch(err => {
+                console.error('Lỗi khi copy:', err);
+                alert("Không thể copy! Hãy kiểm tra quyền trình duyệt.");
+            });
+        }
+
+        function normalizeHeader(str) {
+            if (!str) return "";
+            return str.toString().toLowerCase()
+                .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Loại bỏ dấu tiếng Việt
+                .replace(/[_\s-]/g, ""); // Loại bỏ khoảng trắng, gạch dưới, gạch ngang
+        }
+
         // --- UTILS & DATA OPERATIONS ---
         function parseDate(dateStr) {
             if (!dateStr) return new Date(0);
@@ -1641,13 +1682,19 @@
                         td.style.fontSize = "0.8rem";
                         td.style.fontWeight = "600";
                         td.style.color = "var(--primary)";
-                    } else if (isEditing) {
-                        const isFirst = (vIdx === 0);
-                        const columnName = rawHeaders[colIndex] ? rawHeaders[colIndex].toString().trim().toLowerCase() : "";
-                        const isAnhColumn = (columnName === 'anh' || columnName.startsWith('anh_'));
-                        const isNgayColumn = (columnName === 'ngay_nhan');
-                        const isMvdColumn = (columnName === 'mvd');
-                        const isSlgColumn = (columnName === 'slg');
+                        tr.appendChild(td);
+                        return;
+                    }
+
+                    let isFirst = (vIdx === 0);
+                    let columnNameRaw = rawHeaders[colIndex] ? rawHeaders[colIndex].toString().trim() : "";
+                    let colNorm = normalizeHeader(columnNameRaw);
+                    let isAnhColumn = (colNorm === 'anh' || colNorm.startsWith('anh'));
+                    let isNgayColumn = (colNorm === 'ngaynhan');
+                    let isMvdColumn = (colNorm === 'mvd');
+                    let isSlgColumn = (colNorm === 'slg');
+
+                    if (isEditing) {
 
                         if (isSlgColumn) {
                             td.innerHTML = `
@@ -1699,7 +1746,21 @@
                         if (isImageUrl(cellValue)) {
                             td.innerHTML = `<img src="${cellValue}" class="img-preview" onclick="zoomImage('${cellValue.replace(/'/g, "\\'")}')" onerror="this.parentElement.textContent='${cellValue.replace(/'/g, "\\'")}'">`;
                         } else {
-                            td.textContent = cellValue;
+                            if (isMvdColumn) {
+                                td.innerHTML = `
+                                <div style="display:flex; align-items:center;">
+                                    <span>${cellValue}</span>
+                                    <button class="btn-copy-mvd" onclick="event.stopPropagation(); copyToClipboard('${cellValue}')" title="Copy MVD">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                            `;
+                            } else {
+                                td.textContent = cellValue;
+                            }
                         }
                     }
                     tr.appendChild(td);
@@ -1845,7 +1906,15 @@
 
                 card.innerHTML = `
                     <div class="card-header">
-                        <div class="card-mvd">${mvdText}</div>
+                        <div class="card-mvd" style="display: flex; align-items: center; gap: 6px;">
+                            ${mvdText}
+                            <button class="btn-copy-mvd" onclick="event.stopPropagation(); copyToClipboard('${mvdText}')" style="background: rgba(255,255,255,0.1); color: white; padding: 2px 4px; border-radius: 4px; font-size: 0.7rem; border: none; cursor: pointer;">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                </svg>
+                            </button>
+                        </div>
                         <div class="card-date">${dateText}</div>
                         ${(isAdmin && isSelectionMode) ? `<input type="checkbox" class="card-checkbox custom-checkbox" ${selectedRows.has(absoluteIndex) ? 'checked' : ''} onclick="event.stopPropagation(); toggleSelect(${absoluteIndex}, ${startIdx + pIdx}, event)">` : ''}
                     </div>
@@ -2083,8 +2152,10 @@
             grid.innerHTML = "";
 
             CONFIG.displayColumns.forEach(columnName => {
-                const colIndex = rawHeaders.indexOf(columnName);
-                if (colIndex === -1 && columnName !== 'id') return;
+                const targetNorm = normalizeHeader(columnName);
+                const colIndex = rawHeaders.findIndex(h => normalizeHeader(h) === targetNorm);
+
+                if (colIndex === -1 && targetNorm !== 'id') return;
 
                 const formItem = document.createElement('div');
                 formItem.className = 'form-item';
@@ -2093,18 +2164,18 @@
                 if (isEditing && colIndex !== -1) {
                     defaultValue = currentData[editIndex][colIndex] || "";
                 } else {
-                    if (columnName === 'ngay_nhan') {
+                    if (targetNorm === 'ngaynhan') {
                         const now = new Date();
                         defaultValue = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
-                    } else if (columnName === 'slg') {
+                    } else if (targetNorm === 'slg') {
                         defaultValue = "1";
                     }
                 }
 
-                const isMvd = (columnName === 'mvd');
-                const isNgay = (columnName === 'ngay_nhan');
-                const isSlg = (columnName === 'slg');
-                const isAnh = (columnName === 'anh' || columnName.startsWith('anh_'));
+                const isMvd = (targetNorm === 'mvd');
+                const isNgay = (targetNorm === 'ngaynhan');
+                const isSlg = (targetNorm === 'slg');
+                const isAnh = (targetNorm === 'anh' || targetNorm.startsWith('anh'));
 
                 let inputHtml = "";
                 if (isSlg) {
