@@ -731,6 +731,10 @@
             .blob {
                 display: none;
             }
+
+            .mobile-hide {
+                display: none !important;
+            }
         }
 
         .btn-qr-helper {
@@ -964,7 +968,7 @@
             <div id="saveStatus" class="save-status"
                 style="display: none; margin-right: 10px; color: var(--primary); font-weight: bold;">Đang lưu thay
                 đổi...</div>
-            <button class="btn-primary admin-only" onclick="exportToExcel()"
+            <button class="btn-primary admin-only mobile-hide" onclick="exportToExcel()"
                 style="background: #10b981; display: none;">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
@@ -974,7 +978,8 @@
                 </svg>
                 Xuất Excel
             </button>
-            <button class="btn-primary admin-only" onclick="exportToMisa()" style="background: #f59e0b; display: none;">
+            <button class="btn-primary admin-only mobile-hide" onclick="exportToMisa()"
+                style="background: #f59e0b; display: none;">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -2042,6 +2047,10 @@
         }
 
         // --- ADD & DELETE ---
+        function addRow() {
+            openAddModal();
+        }
+
         function openAddModal(editIndex = null) {
             const rawHeaders = currentData[0];
             const isEditing = editIndex !== null;
@@ -2052,6 +2061,7 @@
                 if (isAddingNewRow || editingRowIndex !== null) {
                     return alert("Vui lòng hoàn tất dòng đang sửa trước.");
                 }
+                isAddingNewRow = true;
             }
 
             // Cập nhật tiêu đề và nút
@@ -2259,6 +2269,7 @@
                         editingRowIndex = null;
                         filterAndSortData();
                     } else {
+                        isAddingNewRow = false;
                         await fetchData();
                     }
                 } else {
@@ -2573,12 +2584,18 @@
             document.getElementById('inputSheetName').value = localStorage.getItem('gs_name') || CONFIG.sheetName;
             document.getElementById('inputDisplayColumns').value = (localStorage.getItem('gs_cols') || CONFIG.displayColumns.join(', '));
 
-            // Hiển thị cảnh báo URL nếu không có ?user=admin
+            // Kiểm tra link quản trị bí mật
             const urlParams = new URLSearchParams(window.location.search);
-            const isUrl = urlParams.get('user') === 'admin';
-            document.getElementById('adminUrlWarning').style.display = isUrl ? 'none' : 'block';
-            document.getElementById('inputAdminPassword').value = ""; // Không hiện lại mk cũ
+            const isUrlAdmin = urlParams.get('user') === 'admin';
+            const authSection = document.getElementById('adminAuthSection');
 
+            if (isUrlAdmin) {
+                authSection.style.display = 'block';
+            } else {
+                authSection.style.display = 'none';
+            }
+
+            document.getElementById('inputAdminPassword').value = ""; // Không hiện lại mk cũ
             document.getElementById('settingsModal').style.display = 'flex';
         }
 
@@ -2595,17 +2612,18 @@
             // Cập nhật CONFIG động
             CONFIG.displayColumns = colsRaw.split(',').map(s => s.trim()).filter(s => s !== "");
 
-            // Kiểm tra mật khẩu quản trị (Chỉ khi link là ?user=admin)
+            // Kiểm tra mật khẩu quản trị
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('user') === 'admin') {
                 if (passInput === '2026') {
                     sessionStorage.setItem('admin_unlocked', 'true');
-                    alert("Đã mở khóa toàn quyền Quản trị!");
+                    alert("Đã xác thực thành công!");
                 } else if (passInput !== "") {
-                    alert("Mật khẩu quản trị không đúng!");
+                    alert("Thông tin xác thực không chính xác!");
                 }
             } else if (passInput !== "") {
-                alert("Bạn cần phải vào đúng đường dẫn quản trị (?user=admin) mới có thể sử dụng mật khẩu.");
+                // Không tiết lộ tham số ?user=admin
+                alert("Thông tin xác thực không chính xác!");
             }
 
             updateAdminPermissions();
