@@ -1062,7 +1062,7 @@
             <div class="modal-footer">
                 <button class="btn-edit" style="background: rgba(255,255,255,0.1); color: white;"
                     onclick="closeModal('addModal')">Hủy</button>
-                <button class="btn-primary" onclick="saveNewRow()">Lưu dữ liệu</button>
+                <button class="btn-primary btn-save" onclick="saveNewRow()">Lưu dữ liệu</button>
             </div>
         </div>
     </div>
@@ -1161,6 +1161,7 @@
         // Phân trang & Sắp xếp
         let currentPage = 1;
         const rowsPerPage = 20;
+        let sortConfig = { col: null, dir: 'asc' };
         // --- NGOẠI TUYẾN & CHỜ ĐỒNG BỘ ---
         let offlineQueue = JSON.parse(localStorage.getItem('gs_offline_queue') || '[]');
         let isOnline = navigator.onLine;
@@ -2052,8 +2053,19 @@
         }
 
         function openAddModal(editIndex = null) {
-            const rawHeaders = currentData[0];
             const isEditing = editIndex !== null;
+
+            // Bảo vệ nếu dữ liệu chưa tải xong
+            if (!currentData || currentData.length === 0) {
+                if (!isOnline) {
+                    return alert("Dữ liệu chưa được tải về máy. Vui lòng kết nối mạng và Làm mới trang.");
+                }
+                alert("Đang tải dữ liệu tiêu đề, vui lòng thử lại sau giây lát...");
+                fetchData();
+                return;
+            }
+
+            const rawHeaders = currentData[0];
 
             if (isEditing) {
                 editingRowIndex = editIndex;
@@ -2200,7 +2212,7 @@
                 url = `https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/${range}?valueInputOption=USER_ENTERED`;
                 method = "PUT";
             } else {
-                url = `https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/${sname}!A:A:append?valueInputOption=USER_ENTERED`;
+                url = `https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/${sname}!A1:append?valueInputOption=USER_ENTERED`;
                 method = "POST";
             }
 
@@ -2218,6 +2230,12 @@
 
         async function saveNewRow() {
             if (isSaving) return;
+
+            if (!currentData || currentData.length === 0) {
+                alert("Hệ thống chưa sẵn sàng. Vui lòng đợi dữ liệu tải xong.");
+                return;
+            }
+
             const inputs = document.querySelectorAll('.add-input');
             const rawHeaders = currentData[0];
             const isEditing = (editingRowIndex !== null);
