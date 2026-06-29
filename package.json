@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node concat.js && vite build && node -e \"require('fs').copyFileSync('dist/index_dev.html', 'index.html')\"",
     "preview": "vite preview"
   },
   "keywords": [],

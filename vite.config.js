@@ -5,7 +5,10 @@ import { viteSingleFile } from 'vite-plugin-singlefile';
 export default defineConfig({
   base: './',
   build: {
-    sourcemap: false, // Tắt sourcemap để tránh lộ code
+    rollupOptions: {
+      input: 'index_dev.html'
+    },
+    sourcemap: false, // Bắt buộc false để không lộ code gốc
     minify: 'terser',
   },
   plugins: [
