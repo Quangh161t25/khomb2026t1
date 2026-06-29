@@ -9707,6 +9707,7 @@ window.addEventListener('resize', () => {
 // ============================================================
 
 // Chạy ngay khi DOM vừa tải để tránh chớp màn hình đăng nhập
+// Chạy ngay khi DOM vừa tải để tránh chớp màn hình đăng nhập
 document.addEventListener('DOMContentLoaded', () => {
     const ls = document.getElementById('loginScreen');
     const ma = document.getElementById('mainApp');
@@ -9719,6 +9720,11 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
         if (ls) ls.classList.remove('hidden');
         if (ma) ma.classList.add('hidden');
+        
+        // Push dang-nhap route if not already there
+        if (window.location.pathname !== '/dang-nhap') {
+            window.history.pushState({ module: 'login' }, '', '/dang-nhap');
+        }
     }
 });
 
