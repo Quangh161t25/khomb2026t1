@@ -24,6 +24,8 @@ export default defineConfig({
         controlFlowFlatteningThreshold: 0.75,
         deadCodeInjection: true,
         deadCodeInjectionThreshold: 0.4,
+        domainLock: ['khomb2026t1.vercel.app'],
+        domainLockRedirectUrl: 'about:blank',
         debugProtection: false,
         debugProtectionInterval: 0,
         disableConsoleOutput: false,
