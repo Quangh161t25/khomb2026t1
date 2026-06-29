@@ -1,0 +1,22 @@
+{
+  "name": "UPMISA Management",
+  "short_name": "UPMISA",
+  "description": "Hệ thống quản lý kho và đơn hàng UPMISA",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png"
+    },
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
