@@ -9713,9 +9713,51 @@ document.addEventListener('DOMContentLoaded', () => {
     if (localStorage.getItem('erp_current_user')) {
         if (ls) ls.classList.add('hidden');
         if (ma) ma.classList.remove('hidden');
+        
+        // Handle initial routing
+        handleInitialRoute();
     } else {
         if (ls) ls.classList.remove('hidden');
         if (ma) ma.classList.add('hidden');
+    }
+});
+
+const moduleTitleMap = {
+    'home': 'Trang chủ',
+    'donhang': 'UP Đơn chi tiết',
+    'sanpham': 'Sản phẩm phần mềm',
+    'baocao': 'Báo cáo đơn hàng',
+    'upmisa': 'UPMISA',
+    'inventory': 'Quản lý Tồn Kho',
+    'hang_hoan': 'Dữ liệu Hàng hoàn',
+    'hh_shop_dien': 'HH SHOP ĐIỀN',
+    'bc_hang_hoan': 'Báo cáo hàng hoàn',
+    'ban_don': 'Bắn đơn',
+    'baocao_tong': 'Báo cáo tổng',
+    'dhct_form': 'Thêm Đơn hàng chi tiết',
+    'dhct': 'Đơn hàng chi tiết',
+    'donhang_tong': 'Đơn hàng'
+};
+
+function handleInitialRoute() {
+    const path = decodeURIComponent(window.location.pathname).replace(/^\//, '');
+    let initialModule = 'home';
+    if (path) {
+        for (const [mod, title] of Object.entries(moduleTitleMap)) {
+            if (title === path) {
+                initialModule = mod;
+                break;
+            }
+        }
+    }
+    switchModule(initialModule, true);
+}
+
+window.addEventListener('popstate', (event) => {
+    if (event.state && event.state.module) {
+        switchModule(event.state.module, true);
+    } else {
+        handleInitialRoute();
     }
 });
 
@@ -9828,7 +9870,7 @@ function setupDragAndDropDonhang() {
     });
 }
 
-function switchModule(module) {
+function switchModule(module, skipPushState = false) {
     const homeModule = document.getElementById('moduleHome');
     const donhangModule = document.getElementById('moduleDonhang');
     const sanphamModule = document.getElementById('moduleSanpham');
@@ -10029,6 +10071,13 @@ function switchModule(module) {
         if (typeof fetchDHCTData === 'function') fetchDHCTData(true);
     }
     if (window.innerWidth <= 1024) closeMobileSidebar();
+
+    if (!skipPushState && moduleTitleMap[module]) {
+        const newUrl = `/${moduleTitleMap[module]}`;
+        if (decodeURIComponent(window.location.pathname) !== newUrl) {
+            window.history.pushState({ module: module }, '', newUrl);
+        }
+    }
 }
 
     Object.assign(window.AppModules = window.AppModules || {}, { ['main']: true });
