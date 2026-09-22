@@ -76,7 +76,9 @@ export default function HangHoanTable({
               const isTra =
                 (item.trang_thai || '').toLowerCase() === 'trả' ||
                 (item.trang_thai || '').toLowerCase() === 'tra';
-              const skuTong = item.sku_tong || '-';
+              const key = `${(item.ngay_nhan || '').toString().trim()}|${(item.mvd || '').toString().trim()}`;
+              const bucket = skuTongMap?.get(key);
+              const skuTong = bucket?.skuTong || item.sku_tong || '-';
               const maGian = item.ma_gian || '';
 
               return (
