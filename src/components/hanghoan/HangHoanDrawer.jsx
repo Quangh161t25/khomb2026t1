@@ -311,7 +311,6 @@ export default function HangHoanDrawer({
           <div className="grid grid-cols-2 gap-2.5">
             {/* MVD */}
             <div className="col-span-2">
-              <label className="block text-[10.5px] font-bold text-slate-500 uppercase mb-1">MVD</label>
               <div className="flex gap-1.5">
                 <div className="relative flex-1">
                   <input
@@ -319,7 +318,7 @@ export default function HangHoanDrawer({
                     required
                     value={mvd}
                     onChange={(e) => handleMvdChange(e.target.value)}
-                    placeholder="Mã vận đơn chính..."
+                    placeholder="Mã vận đơn chính (MVD)... *"
                     className="w-full pl-3 pr-8 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20"
                   />
                   {mvd && (
@@ -345,14 +344,13 @@ export default function HangHoanDrawer({
 
             {/* MVD 2 */}
             <div className="col-span-2">
-              <label className="block text-[10.5px] font-bold text-slate-500 uppercase mb-1">MVD 2 (Mã phụ)</label>
               <div className="flex gap-1.5">
                 <div className="relative flex-1">
                   <input
                     type="text"
                     value={mvd2}
                     onChange={(e) => setMvd2(e.target.value)}
-                    placeholder="Mã vận đơn 2..."
+                    placeholder="MVD 2 (Mã phụ)..."
                     className="w-full pl-3 pr-8 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20"
                   />
                   {mvd2 && (
@@ -378,7 +376,6 @@ export default function HangHoanDrawer({
 
             {/* Mã gian */}
             <div>
-              <label className="block text-[10.5px] font-bold text-slate-500 uppercase mb-1">Mã gian</label>
               <input
                 type="text"
                 value={maGian}
@@ -390,12 +387,11 @@ export default function HangHoanDrawer({
 
             {/* SKU CT with Auto-suggestions */}
             <div className="relative">
-              <label className="block text-[10.5px] font-bold text-slate-500 uppercase mb-1">SKU CT</label>
               <input
                 type="text"
                 value={skuCt}
                 onChange={(e) => handleSkuCtInput(e.target.value)}
-                placeholder="SKU chi tiết..."
+                placeholder="SKU chi tiết (SKU CT)..."
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-bold text-indigo-700 outline-none focus:ring-2 focus:ring-blue-500/20"
               />
 
@@ -417,24 +413,23 @@ export default function HangHoanDrawer({
 
             {/* SKU */}
             <div>
-              <label className="block text-[10.5px] font-bold text-slate-500 uppercase mb-1">SKU</label>
               <input
                 type="text"
                 value={sku}
                 onChange={(e) => setSku(e.target.value)}
                 placeholder="Mã SKU..."
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs text-slate-700 bg-slate-50 outline-none"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs text-slate-700 bg-slate-50 outline-none focus:ring-2 focus:ring-blue-500/20"
               />
             </div>
 
             {/* SLG with Steppers */}
             <div>
-              <label className="block text-[10.5px] font-bold text-slate-500 uppercase mb-1">Số lượng</label>
-              <div className="flex items-center">
+              <div className="flex items-center h-8">
+                <span className="px-2 text-[10px] font-bold text-slate-500 bg-slate-100 border border-r-0 border-slate-200 rounded-l-lg h-full flex items-center uppercase">SLG</span>
                 <button
                   type="button"
                   onClick={() => setSlg((prev) => Math.max(1, prev - 1))}
-                  className="w-8 h-8 flex items-center justify-center border border-slate-200 rounded-l-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
+                  className="w-7 h-full flex items-center justify-center border border-slate-200 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
                 >
                   -
                 </button>
@@ -443,12 +438,12 @@ export default function HangHoanDrawer({
                   min="1"
                   value={slg}
                   onChange={(e) => setSlg(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="flex-1 w-full h-8 text-center border-y border-slate-200 text-xs font-bold text-slate-900 outline-none"
+                  className="flex-1 w-full h-full text-center border-y border-slate-200 text-xs font-bold text-slate-900 outline-none"
                 />
                 <button
                   type="button"
                   onClick={() => setSlg((prev) => prev + 1)}
-                  className="w-8 h-8 flex items-center justify-center border border-slate-200 rounded-r-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
+                  className="w-7 h-full flex items-center justify-center border border-slate-200 rounded-r-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
                 >
                   +
                 </button>
@@ -457,14 +452,13 @@ export default function HangHoanDrawer({
 
             {/* Hoàn / Trả */}
             <div>
-              <label className="block text-[10.5px] font-bold text-slate-500 uppercase mb-1">Trạng thái</label>
               <div className="flex items-center h-8 p-0.5 border border-slate-200 rounded-lg bg-slate-100 gap-1">
                 {['Hoàn', 'Trả'].map((ht) => (
                   <button
                     key={ht}
                     type="button"
                     onClick={() => setHoanTra(ht)}
-                    className={`flex-1 h-full rounded text-xs font-bold transition-all ${
+                    className={`flex-1 h-full rounded text-[11px] font-bold transition-all ${
                       hoanTra === ht
                         ? 'bg-white text-slate-900 shadow-xs'
                         : 'text-slate-500 hover:text-slate-800'
@@ -478,14 +472,13 @@ export default function HangHoanDrawer({
 
             {/* Kho */}
             <div>
-              <label className="block text-[10.5px] font-bold text-slate-500 uppercase mb-1">Kho</label>
               <div className="flex items-center h-8 p-0.5 border border-slate-200 rounded-lg bg-slate-100 gap-1">
                 {['KHO', 'BH'].map((k) => (
                   <button
                     key={k}
                     type="button"
                     onClick={() => setKho(k)}
-                    className={`flex-1 h-full rounded text-xs font-bold transition-all ${
+                    className={`flex-1 h-full rounded text-[11px] font-bold transition-all ${
                       kho === k
                         ? 'bg-white text-slate-900 shadow-xs'
                         : 'text-slate-500 hover:text-slate-800'
@@ -499,19 +492,17 @@ export default function HangHoanDrawer({
 
             {/* Tình trạng */}
             <div className="col-span-2">
-              <label className="block text-[10.5px] font-bold text-slate-500 uppercase mb-1">Tình trạng</label>
               <input
                 type="text"
                 value={tinhTrang}
                 onChange={(e) => setTinhTrang(e.target.value)}
-                placeholder="Tình trạng hàng (vd: nguyên seal, vỡ vỏ, móp méo...)"
+                placeholder="Tình trạng (vd: nguyên seal, vỡ vỏ, móp méo...)"
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500/20"
               />
             </div>
 
             {/* Tên SP */}
             <div className="col-span-2">
-              <label className="block text-[10.5px] font-bold text-slate-500 uppercase mb-1">Tên sản phẩm</label>
               <input
                 type="text"
                 value={tenSp}
@@ -523,12 +514,12 @@ export default function HangHoanDrawer({
 
             {/* Ngày nhận with Steppers */}
             <div className="col-span-2">
-              <label className="block text-[10.5px] font-bold text-slate-500 uppercase mb-1">Ngày nhận</label>
-              <div className="flex items-center">
+              <div className="flex items-center h-8">
+                <span className="px-2 text-[10px] font-bold text-slate-500 bg-slate-100 border border-r-0 border-slate-200 rounded-l-lg h-full flex items-center uppercase whitespace-nowrap">Ngày nhận</span>
                 <button
                   type="button"
                   onClick={() => setNgayNhan((prev) => shiftDate(prev, -1))}
-                  className="w-8 h-8 flex items-center justify-center border border-slate-200 rounded-l-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
+                  className="w-8 h-full flex items-center justify-center border border-slate-200 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
                 >
                   -
                 </button>
@@ -536,12 +527,12 @@ export default function HangHoanDrawer({
                   type="date"
                   value={ngayNhan}
                   onChange={(e) => setNgayNhan(e.target.value)}
-                  className="flex-1 w-full h-8 text-center border-y border-slate-200 text-xs font-semibold text-slate-800 outline-none"
+                  className="flex-1 w-full h-full text-center border-y border-slate-200 text-[11px] font-semibold text-slate-800 outline-none"
                 />
                 <button
                   type="button"
                   onClick={() => setNgayNhan((prev) => shiftDate(prev, 1))}
-                  className="w-8 h-8 flex items-center justify-center border border-slate-200 rounded-r-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
+                  className="w-8 h-full flex items-center justify-center border border-slate-200 rounded-r-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
                 >
                   +
                 </button>
@@ -550,19 +541,18 @@ export default function HangHoanDrawer({
 
             {/* MDH */}
             <div className="col-span-2">
-              <label className="block text-[10.5px] font-bold text-slate-500 uppercase mb-1">MDH (Mã đơn hàng)</label>
               <input
                 type="text"
                 value={mdh}
                 onChange={(e) => setMdh(e.target.value)}
-                placeholder="Mã đơn hàng..."
+                placeholder="MDH (Mã đơn hàng)..."
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500/20"
               />
             </div>
 
             {/* 3 Real Photos Upload */}
             <div className="col-span-2 space-y-1.5 pt-1">
-              <div className="text-[10.5px] font-bold text-slate-500 uppercase">Ảnh thực tế (Tối đa 3 ảnh)</div>
+              <div className="text-[10px] font-bold text-slate-400 uppercase">Ảnh thực tế (Tối đa 3 ảnh)</div>
               <div className="grid grid-cols-3 gap-2">
                 {[
                   { slot: 1, val: anh1, setter: setAnh1 },
