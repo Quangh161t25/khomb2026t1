@@ -724,7 +724,7 @@ export default function HangHoanPage() {
       <HangHoanDrawer
         isOpen={isDrawerOpen}
         mode={drawerMode}
-        item={selectedItem}
+        initialData={selectedItem}
         sanphamData={sanphamData}
         udctData={udctData}
         hangHoanData={data}
