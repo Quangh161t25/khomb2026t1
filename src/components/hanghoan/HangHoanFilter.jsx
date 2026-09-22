@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Table as TableIcon,
   LayoutGrid,
@@ -11,6 +11,9 @@ import {
   FileSpreadsheet,
   FileCode2,
   Trash2,
+  Filter,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { toYMD, shiftDate } from '../../utils/dateUtils';
 
@@ -59,6 +62,8 @@ export default function HangHoanFilter(props) {
     onExportExcelMvd,
   } = props;
 
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+
   const count = typeof totalCount === 'number' ? totalCount : (typeof statsCount === 'number' ? statsCount : 0);
   const currentFrom = fromDate ?? filters.from ?? '';
   const currentTo = toDate ?? filters.to ?? '';
@@ -68,23 +73,13 @@ export default function HangHoanFilter(props) {
   const currentSearch = searchQuery ?? filters.search ?? '';
   const stores = gianHangOptions || maGianList || [];
 
-  const handleShift = (type, days) => {
-    if (onShiftDate) {
-      onShiftDate(type, days);
-    } else if (setFilters) {
-      setFilters((prev) => {
-        const val = prev[type] || toYMD(new Date());
-        return { ...prev, [type]: shiftDate(val, days) };
-      });
-    }
-  };
+  const todayStr = toYMD(new Date());
 
   const handleToday = () => {
     if (onSetToday) {
       onSetToday();
     } else if (setFilters) {
-      const today = toYMD(new Date());
-      setFilters((prev) => ({ ...prev, from: today, to: today }));
+      setFilters((prev) => ({ ...prev, from: todayStr, to: todayStr }));
     }
   };
 
@@ -126,18 +121,64 @@ export default function HangHoanFilter(props) {
     if (setFilters) setFilters((prev) => ({ ...prev, to: v }));
   };
 
+  // --- Single Stepper Logic ---
+  const isSingleDay = currentFrom === currentTo;
+  
+  const formatDateDisplay = (d) => {
+    if (!d) return '';
+    if (d === todayStr) return 'Hôm nay';
+    const parts = d.split('-');
+    if (parts.length === 3) return `${parts[2]}/${parts[1]}`;
+    return d;
+  };
+
+  const dateDisplay = isSingleDay 
+    ? formatDateDisplay(currentFrom)
+    : `${formatDateDisplay(currentFrom)} - ${formatDateDisplay(currentTo)}`;
+
+  const shiftDuration = isSingleDay 
+    ? 1 
+    : Math.round((new Date(currentTo) - new Date(currentFrom)) / (1000 * 60 * 60 * 24)) + 1;
+
+  const handleStepDate = (direction) => {
+     const days = shiftDuration * direction;
+     if (onShiftDate) {
+       // Using legacy onShiftDate doesn't quite map perfectly if shifting 'to' and 'from' together,
+       // but we'll assume modern setFilters is preferred.
+       if (setFilters) {
+         setFilters((prev) => ({
+           ...prev,
+           from: shiftDate(currentFrom, days),
+           to: shiftDate(currentTo, days)
+         }));
+       }
+     } else if (setFilters) {
+       setFilters((prev) => ({
+         ...prev,
+         from: shiftDate(currentFrom, days),
+         to: shiftDate(currentTo, days)
+       }));
+     } else {
+       if (setFromDate) setFromDate(shiftDate(currentFrom, days));
+       if (setToDate) setToDate(shiftDate(currentTo, days));
+     }
+  };
+
+  // Check if any advanced filters are active to highlight the filter button
+  const hasAdvancedFilters = currentKho !== '' || currentTrangThai !== '' || currentMaGian !== '';
+
   return (
-    <div className="p-2.5 sm:p-3 border-b border-slate-200 bg-white space-y-2 lg:space-y-3 rounded-2xl shadow-xs">
+    <div className="p-2.5 sm:p-3 border-b border-slate-200 bg-white space-y-2 lg:space-y-3 rounded-2xl shadow-xs relative">
       {/* Filters & Search Row */}
-      <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-3">
+      <div className="flex flex-wrap lg:flex-nowrap lg:items-center gap-2 lg:gap-3">
         {/* Stats & View Mode Toggle & Refresh */}
-        <div className="flex items-center justify-between lg:justify-start gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           <div className="text-[11px] font-bold text-slate-600 uppercase tracking-tight bg-slate-100 px-2.5 py-1.5 rounded-lg border border-slate-200">
             Số đơn: {Number(count).toLocaleString('vi-VN')}
           </div>
 
           <div className="flex items-center gap-1.5">
-            {/* View Mode Toggle: [ Bảng | Thẻ ] */}
+            {/* View Mode Toggle */}
             <div className="flex items-center bg-slate-100 p-0.5 rounded-lg shrink-0 border border-slate-200/60">
               <button
                 type="button"
@@ -150,7 +191,7 @@ export default function HangHoanFilter(props) {
                 title="Xem dạng Bảng"
               >
                 <TableIcon className="w-3.5 h-3.5" />
-                <span className="text-[10.5px]">Bảng</span>
+                <span className="text-[10.5px] hidden sm:inline">Bảng</span>
               </button>
               <button
                 type="button"
@@ -163,7 +204,7 @@ export default function HangHoanFilter(props) {
                 title="Xem dạng Thẻ (Card)"
               >
                 <LayoutGrid className="w-3.5 h-3.5" />
-                <span className="text-[10.5px]">Thẻ</span>
+                <span className="text-[10.5px] hidden sm:inline">Thẻ</span>
               </button>
             </div>
 
@@ -172,137 +213,49 @@ export default function HangHoanFilter(props) {
               type="button"
               onClick={handleRefresh}
               disabled={loading}
-              className="p-1.5 lg:p-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors border border-slate-200/60 cursor-pointer"
+              className="p-1.5 lg:p-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors border border-slate-200/60 cursor-pointer"
               title="Tải lại dữ liệu"
             >
               <RotateCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
-
-            {/* Today shortcut button */}
-            <button
-              type="button"
-              onClick={handleToday}
-              className="px-2.5 py-1.5 bg-blue-50 text-blue-600 border border-blue-200 text-[10px] font-bold rounded-lg hover:bg-blue-100 transition-colors uppercase whitespace-nowrap cursor-pointer"
-            >
-              Hôm nay
-            </button>
           </div>
         </div>
 
-        {/* Date Filter: Từ ngày - Đến ngày */}
-        <div className="grid grid-cols-2 gap-1.5 sm:gap-2 lg:flex lg:items-center lg:gap-2">
-          <div className="flex items-center">
-            <button
-              type="button"
-              onClick={() => handleShift('from', -1)}
-              className="w-7 h-8 px-1.5 flex items-center justify-center bg-slate-100 border border-slate-200 border-r-0 rounded-l-lg text-slate-600 hover:bg-slate-200 transition-all font-bold text-xs cursor-pointer"
-            >
-              -
-            </button>
-            <input
-              type="date"
-              value={currentFrom}
-              onChange={(e) => updateFrom(e.target.value)}
-              className="w-full lg:w-28 h-8 px-1 bg-slate-50 border border-slate-200 text-[11px] font-semibold focus:ring-0 outline-none text-center"
-            />
-            <button
-              type="button"
-              onClick={() => handleShift('from', 1)}
-              className="w-7 h-8 px-1.5 flex items-center justify-center bg-slate-100 border border-slate-200 border-l-0 rounded-r-lg text-slate-600 hover:bg-slate-200 transition-all font-bold text-xs cursor-pointer"
-            >
-              +
-            </button>
-          </div>
-
-          <div className="flex items-center">
-            <button
-              type="button"
-              onClick={() => handleShift('to', -1)}
-              className="w-7 h-8 px-1.5 flex items-center justify-center bg-slate-100 border border-slate-200 border-r-0 rounded-l-lg text-slate-600 hover:bg-slate-200 transition-all font-bold text-xs cursor-pointer"
-            >
-              -
-            </button>
-            <input
-              type="date"
-              value={currentTo}
-              onChange={(e) => updateTo(e.target.value)}
-              className="w-full lg:w-28 h-8 px-1 bg-slate-50 border border-slate-200 text-[11px] font-semibold focus:ring-0 outline-none text-center"
-            />
-            <button
-              type="button"
-              onClick={() => handleShift('to', 1)}
-              className="w-7 h-8 px-1.5 flex items-center justify-center bg-slate-100 border border-slate-200 border-l-0 rounded-r-lg text-slate-600 hover:bg-slate-200 transition-all font-bold text-xs cursor-pointer"
-            >
-              +
-            </button>
-          </div>
+        {/* Single Stepper Date */}
+        <div className="flex items-center shrink-0">
+           <button 
+             type="button"
+             onClick={() => handleStepDate(-1)} 
+             className="w-7 h-8 flex items-center justify-center bg-slate-100 border border-slate-200 border-r-0 rounded-l-lg text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-colors cursor-pointer"
+             title="Lùi thời gian"
+           >
+             <ChevronLeft className="w-4 h-4"/>
+           </button>
+           <div 
+             className="h-8 px-3 flex items-center justify-center bg-slate-50 border border-slate-200 text-[11px] font-bold text-indigo-700 min-w-[110px] text-center cursor-pointer hover:bg-indigo-50 transition-colors"
+             onClick={() => setIsFilterOpen(true)}
+             title="Nhấn để chọn ngày cụ thể"
+           >
+             {dateDisplay}
+           </div>
+           <button 
+             type="button"
+             onClick={() => handleStepDate(1)} 
+             className="w-7 h-8 flex items-center justify-center bg-slate-100 border border-slate-200 border-l-0 rounded-r-lg text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-colors cursor-pointer"
+             title="Tiến thời gian"
+           >
+             <ChevronRight className="w-4 h-4"/>
+           </button>
         </div>
 
-        {/* Warehouse, Status, Store filters */}
-        <div className="flex flex-wrap lg:flex-nowrap items-center gap-1.5 lg:gap-2 lg:min-w-0">
-          {/* Kho buttons */}
-          <div className="flex gap-0.5 bg-slate-100 p-0.5 rounded-lg shrink-0 border border-slate-200/60">
-            {['', 'KHO', 'BH'].map((k) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => updateKho(k)}
-                className={`px-2 py-1 rounded text-[10.5px] font-bold transition-all cursor-pointer ${
-                  currentKho === k
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                {k === '' ? 'Tất cả' : k}
-              </button>
-            ))}
-          </div>
-
-          {/* Trạng thái buttons (Hoàn / Trả) */}
-          <div className="flex gap-0.5 bg-slate-100 p-0.5 rounded-lg shrink-0 border border-slate-200/60">
-            {[
-              { id: '', label: 'Tất cả' },
-              { id: 'Hoàn', label: 'Hoàn' },
-              { id: 'Trả', label: 'Trả' },
-            ].map((st) => (
-              <button
-                key={st.id}
-                type="button"
-                onClick={() => updateTrangThai(st.id)}
-                className={`px-2 py-1 rounded text-[10.5px] font-bold transition-all cursor-pointer ${
-                  currentTrangThai === st.id
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                {st.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Gian hàng select */}
-          <select
-            value={currentMaGian}
-            onChange={(e) => updateMaGian(e.target.value)}
-            className="w-full sm:w-auto flex-1 lg:w-36 lg:flex-none px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-blue-500/20 outline-none cursor-pointer truncate"
-          >
-            <option value="">Tất cả gian hàng</option>
-            {stores.map((g) => (
-              <option key={g} value={g}>
-                {g}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Multi-keyword Search Box with X clear and QR camera */}
+        {/* Multi-keyword Search Box */}
         <div className="relative flex-1 min-w-[200px]">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             value={currentSearch}
             onChange={(e) => updateSearch(e.target.value)}
-            placeholder="Tìm MVD, Gian, SKU, Tình trạng (dấu , tìm nhiều)..."
+            placeholder="Tìm MVD, Gian, SKU, Tình trạng..."
             className="w-full pl-9 pr-16 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500/20 outline-none focus:bg-white transition-all font-medium"
           />
           <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
@@ -326,6 +279,22 @@ export default function HangHoanFilter(props) {
             </button>
           </div>
         </div>
+
+        {/* Lọc nâng cao Button */}
+        <button 
+          type="button"
+          onClick={() => setIsFilterOpen(!isFilterOpen)} 
+          className={`flex items-center gap-1.5 h-8 px-3 border rounded-lg text-xs font-bold transition-colors shrink-0 cursor-pointer ${
+            hasAdvancedFilters 
+              ? 'bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100' 
+              : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+          }`}
+          title="Bộ lọc nâng cao"
+        >
+           <Filter className="w-3.5 h-3.5" />
+           <span className="hidden sm:inline">Lọc</span>
+           {hasAdvancedFilters && <span className="w-2 h-2 rounded-full bg-rose-500 ml-0.5"></span>}
+        </button>
       </div>
 
       {/* Action Buttons Row */}
@@ -391,6 +360,128 @@ export default function HangHoanFilter(props) {
           </div>
         )}
       </div>
+
+      {/* OVERLAY FILTER DRAWER */}
+      {isFilterOpen && (
+        <div className="absolute top-12 right-2 lg:right-6 w-[320px] bg-white rounded-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.3)] border border-slate-200 z-50 p-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+           <div className="flex justify-between items-center mb-1 border-b border-slate-100 pb-2">
+             <h3 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+               <Filter className="w-4 h-4 text-indigo-600" />
+               Bộ lọc nâng cao
+             </h3>
+             <button 
+               onClick={() => setIsFilterOpen(false)} 
+               className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
+             >
+               <X className="w-4 h-4"/>
+             </button>
+           </div>
+           
+           <div className="space-y-4">
+             {/* Chọn Ngày */}
+             <div>
+               <label className="block text-[10.5px] font-bold text-slate-500 mb-1.5 uppercase tracking-wide">Khoảng thời gian</label>
+               <div className="flex items-center gap-2">
+                 <input 
+                   type="date" 
+                   value={currentFrom} 
+                   onChange={(e) => updateFrom(e.target.value)} 
+                   className="w-full h-8 px-2 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 outline-none" 
+                 />
+                 <span className="text-slate-400 font-bold">-</span>
+                 <input 
+                   type="date" 
+                   value={currentTo} 
+                   onChange={(e) => updateTo(e.target.value)} 
+                   className="w-full h-8 px-2 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 outline-none" 
+                 />
+               </div>
+               <div className="flex justify-end mt-2">
+                 <button 
+                   onClick={handleToday} 
+                   className="text-[10px] bg-blue-50 text-blue-600 hover:bg-blue-100 px-2.5 py-1 rounded font-bold transition-colors cursor-pointer"
+                 >
+                   Hôm nay
+                 </button>
+               </div>
+             </div>
+
+             {/* Chọn Kho */}
+             <div>
+               <label className="block text-[10.5px] font-bold text-slate-500 mb-1.5 uppercase tracking-wide">Kho</label>
+               <div className="flex flex-wrap gap-1.5">
+                 {['', 'KHO', 'BH'].map(k => (
+                   <button 
+                     key={k} 
+                     onClick={() => updateKho(k)} 
+                     className={`px-3 py-1.5 rounded-lg text-[11px] border transition-all cursor-pointer ${
+                       currentKho === k 
+                         ? 'bg-blue-50 border-blue-300 text-blue-700 font-bold shadow-xs' 
+                         : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 font-medium'
+                     }`}
+                   >
+                     {k || 'Tất cả'}
+                   </button>
+                 ))}
+               </div>
+             </div>
+
+             {/* Chọn Trạng thái */}
+             <div>
+               <label className="block text-[10.5px] font-bold text-slate-500 mb-1.5 uppercase tracking-wide">Trạng thái</label>
+               <div className="flex flex-wrap gap-1.5">
+                 {['', 'Hoàn', 'Trả'].map(st => (
+                   <button 
+                     key={st} 
+                     onClick={() => updateTrangThai(st)} 
+                     className={`px-3 py-1.5 rounded-lg text-[11px] border transition-all cursor-pointer ${
+                       currentTrangThai === st 
+                         ? 'bg-blue-50 border-blue-300 text-blue-700 font-bold shadow-xs' 
+                         : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 font-medium'
+                     }`}
+                   >
+                     {st || 'Tất cả'}
+                   </button>
+                 ))}
+               </div>
+             </div>
+
+             {/* Chọn Gian hàng */}
+             <div>
+               <label className="block text-[10.5px] font-bold text-slate-500 mb-1.5 uppercase tracking-wide">Gian hàng</label>
+               <select 
+                 value={currentMaGian} 
+                 onChange={(e) => updateMaGian(e.target.value)} 
+                 className="w-full h-8 px-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-blue-500/20 outline-none cursor-pointer"
+               >
+                 <option value="">-- Tất cả gian hàng --</option>
+                 {stores.map(g => <option key={g} value={g}>{g}</option>)}
+               </select>
+             </div>
+           </div>
+
+           {/* Footer Action */}
+           <div className="mt-2 pt-3 border-t border-slate-100 flex justify-end">
+             <button 
+               onClick={() => {
+                 updateKho('');
+                 updateTrangThai('');
+                 updateMaGian('');
+                 handleToday();
+               }} 
+               className="text-[11px] text-slate-500 hover:text-rose-600 font-medium px-3 py-1.5 rounded hover:bg-rose-50 transition-colors cursor-pointer"
+             >
+               Xóa bộ lọc
+             </button>
+             <button 
+               onClick={() => setIsFilterOpen(false)} 
+               className="text-[11px] bg-indigo-600 text-white font-bold px-4 py-1.5 rounded-lg shadow-xs hover:bg-indigo-700 transition-colors ml-2 cursor-pointer"
+             >
+               Đóng
+             </button>
+           </div>
+        </div>
+      )}
     </div>
   );
 }
