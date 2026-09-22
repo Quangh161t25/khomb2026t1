@@ -143,8 +143,6 @@ export default function HangHoanFilter(props) {
   const handleStepDate = (direction) => {
      const days = shiftDuration * direction;
      if (onShiftDate) {
-       // Using legacy onShiftDate doesn't quite map perfectly if shifting 'to' and 'from' together,
-       // but we'll assume modern setFilters is preferred.
        if (setFilters) {
          setFilters((prev) => ({
            ...prev,
@@ -164,6 +162,45 @@ export default function HangHoanFilter(props) {
      }
   };
 
+  const setQuickDate = (range) => {
+    const today = new Date();
+    let from, to;
+    if (range === 'today') {
+      from = todayStr;
+      to = from;
+    } else if (range === 'yesterday') {
+      const y = new Date(today);
+      y.setDate(y.getDate() - 1);
+      from = toYMD(y);
+      to = from;
+    } else if (range === 'thisWeek') {
+      const day = today.getDay();
+      const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+      const startOfWeek = new Date(today.setDate(diff));
+      from = toYMD(startOfWeek);
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(endOfWeek.getDate() + 6);
+      to = toYMD(endOfWeek);
+    } else if (range === 'lastWeek') {
+      const day = today.getDay();
+      const diff = today.getDate() - day + (day === 0 ? -6 : 1) - 7;
+      const startOfLastWeek = new Date(today.setDate(diff));
+      from = toYMD(startOfLastWeek);
+      const endOfLastWeek = new Date(startOfLastWeek);
+      endOfLastWeek.setDate(endOfLastWeek.getDate() + 6);
+      to = toYMD(endOfLastWeek);
+    } else if (range === 'thisMonth') {
+      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      from = toYMD(startOfMonth);
+      to = toYMD(endOfMonth);
+    }
+    
+    if (setFilters) setFilters(prev => ({ ...prev, from, to }));
+    if (setFromDate) setFromDate(from);
+    if (setToDate) setToDate(to);
+  };
+
   // Check if any advanced filters are active to highlight the filter button
   const hasAdvancedFilters = currentKho !== '' || currentTrangThai !== '' || currentMaGian !== '';
 
@@ -178,35 +215,15 @@ export default function HangHoanFilter(props) {
           </div>
 
           <div className="flex items-center gap-1.5">
-            {/* View Mode Toggle */}
-            <div className="flex items-center bg-slate-100 p-0.5 rounded-lg shrink-0 border border-slate-200/60">
-              <button
-                type="button"
-                onClick={() => setViewMode('table')}
-                className={`px-2 py-1 text-xs font-bold rounded-md transition-all flex items-center gap-1 cursor-pointer ${
-                  viewMode === 'table'
-                    ? 'bg-white text-blue-600 shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-                title="Xem dạng Bảng"
-              >
-                <TableIcon className="w-3.5 h-3.5" />
-                <span className="text-[10.5px] hidden sm:inline">Bảng</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('card')}
-                className={`px-2 py-1 text-xs font-bold rounded-md transition-all flex items-center gap-1 cursor-pointer ${
-                  viewMode === 'card'
-                    ? 'bg-white text-blue-600 shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-                title="Xem dạng Thẻ (Card)"
-              >
-                <LayoutGrid className="w-3.5 h-3.5" />
-                <span className="text-[10.5px] hidden sm:inline">Thẻ</span>
-              </button>
-            </div>
+            {/* View Mode Toggle (Single Button) */}
+            <button
+              type="button"
+              onClick={() => setViewMode(viewMode === 'table' ? 'card' : 'table')}
+              className="p-1.5 lg:p-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors border border-slate-200/60 cursor-pointer"
+              title={viewMode === 'table' ? 'Chuyển sang dạng Thẻ' : 'Chuyển sang dạng Bảng'}
+            >
+              {viewMode === 'table' ? <LayoutGrid className="w-4 h-4" /> : <TableIcon className="w-4 h-4" />}
+            </button>
 
             {/* Refresh button */}
             <button
@@ -381,28 +398,35 @@ export default function HangHoanFilter(props) {
              {/* Chọn Ngày */}
              <div>
                <label className="block text-[10.5px] font-bold text-slate-500 mb-1.5 uppercase tracking-wide">Khoảng thời gian</label>
-               <div className="flex items-center gap-2">
+               
+               <div className="flex flex-wrap gap-1.5 mb-2.5">
+                 <button onClick={() => setQuickDate('today')} className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-100 hover:bg-indigo-100 px-2 py-1 rounded font-bold transition-colors cursor-pointer">Hôm nay</button>
+                 <button onClick={() => setQuickDate('yesterday')} className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-100 hover:bg-indigo-100 px-2 py-1 rounded font-bold transition-colors cursor-pointer">Hôm qua</button>
+                 <button onClick={() => setQuickDate('thisWeek')} className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-100 hover:bg-indigo-100 px-2 py-1 rounded font-bold transition-colors cursor-pointer">Tuần này</button>
+                 <button onClick={() => setQuickDate('lastWeek')} className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-100 hover:bg-indigo-100 px-2 py-1 rounded font-bold transition-colors cursor-pointer">Tuần trước</button>
+                 <button onClick={() => setQuickDate('thisMonth')} className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-100 hover:bg-indigo-100 px-2 py-1 rounded font-bold transition-colors cursor-pointer">Tháng này</button>
+               </div>
+
+               <div className="flex items-center gap-1.5">
+                 <button onClick={() => updateFrom(shiftDate(currentFrom, -1))} className="px-1.5 py-1 bg-slate-100 rounded text-slate-600 hover:bg-slate-200 cursor-pointer font-bold">-</button>
                  <input 
                    type="date" 
                    value={currentFrom} 
                    onChange={(e) => updateFrom(e.target.value)} 
-                   className="w-full h-8 px-2 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 outline-none" 
+                   className="flex-1 min-w-0 h-8 px-1 text-center bg-slate-50 border border-slate-200 rounded text-[11px] focus:ring-2 focus:ring-blue-500/20 outline-none" 
                  />
-                 <span className="text-slate-400 font-bold">-</span>
+                 <button onClick={() => updateFrom(shiftDate(currentFrom, 1))} className="px-1.5 py-1 bg-slate-100 rounded text-slate-600 hover:bg-slate-200 cursor-pointer font-bold">+</button>
+                 
+                 <span className="text-slate-300 font-bold px-0.5">-</span>
+                 
+                 <button onClick={() => updateTo(shiftDate(currentTo, -1))} className="px-1.5 py-1 bg-slate-100 rounded text-slate-600 hover:bg-slate-200 cursor-pointer font-bold">-</button>
                  <input 
                    type="date" 
                    value={currentTo} 
                    onChange={(e) => updateTo(e.target.value)} 
-                   className="w-full h-8 px-2 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 outline-none" 
+                   className="flex-1 min-w-0 h-8 px-1 text-center bg-slate-50 border border-slate-200 rounded text-[11px] focus:ring-2 focus:ring-blue-500/20 outline-none" 
                  />
-               </div>
-               <div className="flex justify-end mt-2">
-                 <button 
-                   onClick={handleToday} 
-                   className="text-[10px] bg-blue-50 text-blue-600 hover:bg-blue-100 px-2.5 py-1 rounded font-bold transition-colors cursor-pointer"
-                 >
-                   Hôm nay
-                 </button>
+                 <button onClick={() => updateTo(shiftDate(currentTo, 1))} className="px-1.5 py-1 bg-slate-100 rounded text-slate-600 hover:bg-slate-200 cursor-pointer font-bold">+</button>
                </div>
              </div>
 
