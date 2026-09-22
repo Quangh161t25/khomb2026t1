@@ -11,10 +11,15 @@ import {
   Search,
   Type,
   Command,
+  Wifi,
+  WifiOff,
+  RefreshCcw,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useColumnWidths } from '../context/ColumnWidthContext';
 import NotificationPopover from '../components/common/NotificationPopover';
+import { syncOfflineQueue, getOfflineQueue } from '../services/offlineSync';
+import { appendSheetData } from '../services/googleSheetsApi';
 
 export default function Header({
   activeModule,
@@ -27,7 +32,45 @@ export default function Header({
   const activeUser = user || currentUser;
   const { openSettings } = useColumnWidths();
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [queueCount, setQueueCount] = useState(0);
   const menuRef = useRef(null);
+
+  useEffect(() => {
+    const checkQueue = async () => {
+      const q = await getOfflineQueue();
+      setQueueCount(q.length);
+    };
+    checkQueue();
+    const interval = setInterval(checkQueue, 5000);
+
+    const handleOnline = async () => {
+      setIsOnline(true);
+      setIsSyncing(true);
+      await syncOfflineQueue(appendSheetData);
+      const q = await getOfflineQueue();
+      setQueueCount(q.length);
+      setIsSyncing(false);
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    if (navigator.onLine) {
+      handleOnline();
+    }
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -101,13 +144,21 @@ export default function Header({
       <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
 
         {/* Live Status Pill */}
-        <div className="hidden xl:flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200/60 px-2.5 py-1 rounded-full text-[11px] font-bold select-none">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>Google Sheets Online</span>
-        </div>
+          {/* Network Indicator */}
+          <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold shadow-2xs transition-all ${isOnline ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
+            {isSyncing ? (
+              <RefreshCcw className="w-4 h-4 animate-spin text-blue-600" />
+            ) : isOnline ? (
+              <Wifi className="w-4 h-4" />
+            ) : (
+              <WifiOff className="w-4 h-4" />
+            )}
+            <span>
+              {isSyncing ? 'Đồng bộ...' : isOnline ? (queueCount > 0 ? `Đã online (${queueCount})` : 'Online') : `Offline (${queueCount})`}
+            </span>
+          </div>
 
-        {/* Notifications Bell */}
-        <NotificationPopover />
+          <NotificationPopover />
 
         {/* Dedicated "Cài đặt" Button */}
         <button

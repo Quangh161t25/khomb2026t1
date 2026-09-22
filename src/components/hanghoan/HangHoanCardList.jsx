@@ -78,6 +78,7 @@ export default function HangHoanCardList({
             key={item.id ? `${item.id}-${index}` : index}
             onClick={() => onOpenDetail(item, index)}
             className={`rounded-xl border p-3 shadow-xs hover:shadow-md transition-all cursor-pointer active:scale-[0.99] space-y-1.5 ${
+              item.isOffline ? 'bg-orange-100 border-orange-300 hover:border-orange-400' :
               isSelected ? 'bg-blue-50/70 border-blue-300' : 'bg-white border-slate-200 hover:border-indigo-300'
             }`}
           >

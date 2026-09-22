@@ -112,12 +112,17 @@ export default function HangHoanTable({
               const maGian = item.ma_gian || '';
               
               const isSelected = selectedIds.includes(item.id || item.rowIndex);
+              const isOffline = item.isOffline;
 
               return (
                 <tr
                   key={item.id ? `${item.id}-${index}` : index}
                   onClick={() => onOpenDetail(item, index)}
-                  className={`cursor-pointer transition-colors ${isSelected ? 'bg-blue-50/70 hover:bg-blue-100/70' : 'hover:bg-blue-50/50'}`}
+                  className={`cursor-pointer transition-colors ${
+                    isOffline ? 'bg-orange-100 hover:bg-orange-200' :
+                    isSelected ? 'bg-blue-50/70 hover:bg-blue-100/70' : 
+                    'hover:bg-blue-50/50'
+                  }`}
                 >
                   <td className="px-3 py-2 text-center border-r border-slate-100" onClick={e => e.stopPropagation()}>
                     <input 

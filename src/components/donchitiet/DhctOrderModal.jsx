@@ -340,7 +340,7 @@ export default function DhctOrderModal({
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">Nhà cung cấp / Đối tác</label>
               <input
-                type="text"
+                type="text" autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-form-type="other"
                 list="modalNccList"
                 value={ncc}
                 onChange={(e) => setNcc(e.target.value)}
@@ -418,7 +418,7 @@ export default function DhctOrderModal({
                     <tr key={line.id} className="hover:bg-slate-50">
                       <td className="p-1.5 w-32">
                         <input
-                          type="text"
+                          type="text" autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-form-type="other"
                           value={line.sku_con}
                           onChange={(e) => handleSkuChange(idx, e.target.value)}
                           placeholder="Mã SKU CT..."
@@ -427,7 +427,7 @@ export default function DhctOrderModal({
                       </td>
                       <td className="p-1.5 w-20">
                         <input
-                          type="text"
+                          type="text" autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-form-type="other"
                           readOnly
                           value={line.id_sp}
                           className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs text-slate-600 font-mono font-semibold text-center"
@@ -435,7 +435,7 @@ export default function DhctOrderModal({
                       </td>
                       <td className="p-1.5 min-w-[140px]">
                         <input
-                          type="text"
+                          type="text" autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-form-type="other"
                           readOnly
                           value={line.ten_sp}
                           className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs text-slate-600 truncate text-left"
@@ -462,7 +462,7 @@ export default function DhctOrderModal({
                       </td>
                       <td className="p-1.5 w-28">
                         <input
-                          type="text"
+                          type="text" autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-form-type="other"
                           readOnly
                           value={line.thanh_tien.toLocaleString('vi-VN')}
                           className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs text-right font-mono tabular-nums font-bold text-primary"

@@ -1,5 +1,6 @@
 import jsrsasign from 'jsrsasign';
 import { CONFIG } from '../config/config';
+import { queueOfflineRequest, saveSheetToCache, getSheetFromCache, getOfflineQueue } from './offlineSync';
 
 let accessToken = null;
 let tokenExpiry = 0;
@@ -16,11 +17,11 @@ const SHEET_RANGES = {
     clear: 'A2:AF100000',
     append: 'A:A'
   },
-  HH_BH: { read: 'A:Z', append: 'A:Z', clear: 'A2:Z' },
+  HH_BH: { read: 'A:Z', append: 'A:A', clear: 'A2:Z' },
   DH_CT: { read: 'A:P', append: 'A:A', clear: 'A2:P' },
   TON_KHO: { read: 'A:K', clear: 'A2:K' },
   BAN_DON: { read: 'A1:AF10000', clear: 'A2:AF10000', append: 'A:A' },
-  HH_SHOP_DIEN: { read: 'A:Z', append: 'A:Z', clear: 'A2:Z' }
+  HH_SHOP_DIEN: { read: 'A:Z', append: 'A:A', clear: 'A2:Z' }
 };
 
 export function getSheetRange(sheetName, type = 'read') {
@@ -136,42 +137,82 @@ export async function fetchSheetData(sheetNameOrRange, customRange = null, force
     }
 
     const fullRange = `${sheetName}!${range}`;
-
-    // 1. Check in-memory cache
     const cacheKey = fullRange;
     const ttl = CACHE_TTL[sheetName] || CACHE_TTL.default;
+
+    const mixOfflineData = async (rows) => {
+      try {
+        const queue = await getOfflineQueue();
+        const pendingAppends = queue
+          .filter(q => q.sheetName === sheetName && q.type === 'APPEND' && q.payload)
+          .flatMap(q => q.payload.map(row => {
+            const newRow = [...row];
+            newRow[26] = 'OFFLINE_PENDING';
+            return newRow;
+          }));
+        
+        if (pendingAppends.length > 0) {
+          if (rows.length > 0) {
+            return [...rows, ...pendingAppends];
+          } else {
+            return [...pendingAppends];
+          }
+        }
+      } catch (e) {}
+      return rows;
+    };
+
     const cached = memoryCache.get(cacheKey);
     if (!forceRefresh && cached && Date.now() - cached.timestamp < ttl) {
-      return cached.data;
+      return await mixOfflineData(cached.data);
     }
 
-    // 2. Prevent duplicate concurrent requests for same sheet
+    if (!navigator.onLine) {
+      const persistentData = await getSheetFromCache(cacheKey);
+      if (persistentData) {
+        console.warn(`[Network] Đang offline, tải ${cacheKey} từ Persistent Cache.`);
+        memoryCache.set(cacheKey, { data: persistentData, timestamp: Date.now() });
+        return await mixOfflineData(persistentData);
+      }
+      return await mixOfflineData([]);
+    }
+
     if (inFlightRequests.has(cacheKey)) {
-      return await inFlightRequests.get(cacheKey);
+      const inflightRes = await inFlightRequests.get(cacheKey);
+      return await mixOfflineData(inflightRes);
     }
 
     const requestPromise = (async () => {
       try {
         const token = await getAccessToken();
-        if (!token) return [];
+        if (!token) throw new Error('No token');
 
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(fullRange)}`;
         const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
         if (!resp.ok) {
-          console.error(`Fetch ${fullRange} failed:`, resp.status);
-          return [];
+          throw new Error(`Fetch failed with status: ${resp.status}`);
         }
         const data = await resp.json();
         const rows = data.values || [];
         memoryCache.set(cacheKey, { data: rows, timestamp: Date.now() });
+        await saveSheetToCache(cacheKey, rows);
         return rows;
+      } catch (err) {
+        console.warn(`[Network] Lỗi khi tải ${cacheKey} từ Google Sheets, thử Persistent Cache...`, err);
+        const persistentData = await getSheetFromCache(cacheKey);
+        if (persistentData) {
+          memoryCache.set(cacheKey, { data: persistentData, timestamp: Date.now() });
+          return persistentData;
+        }
+        return [];
       } finally {
         inFlightRequests.delete(cacheKey);
       }
     })();
 
     inFlightRequests.set(cacheKey, requestPromise);
-    return await requestPromise;
+    const resultRows = await requestPromise;
+    return await mixOfflineData(resultRows);
   } catch (err) {
     console.error(`Fetch ${sheetNameOrRange} error:`, err);
     return [];
@@ -200,21 +241,52 @@ export async function fetchAuthData() {
   })).filter(user => user.id && user.password);
 }
 
-export async function appendSheetData(sheetName, values) {
+export async function appendSheetData(sheetNameOrRange, values, bypassQueue = false) {
+  let sheetName = sheetNameOrRange;
+  let range = '';
+  if (sheetNameOrRange.includes('!')) {
+    const parts = sheetNameOrRange.split('!');
+    sheetName = parts[0];
+    range = parts[1];
+  }
+  if (!range) {
+    range = getSheetRange(sheetName, 'append');
+  }
+
+  // Giữ lại sheetName gốc để dùng cho queue
+  const offlineQueueKey = sheetNameOrRange;
+
+  if (!navigator.onLine) {
+    if (bypassQueue) return false;
+    console.warn('[Network] Đang offline, lưu vào hàng đợi cục bộ...');
+    await queueOfflineRequest('APPEND', offlineQueueKey, values);
+    return true;
+  }
+
   try {
     const token = await getAccessToken();
     if (!token) return false;
     clearSheetCache(sheetName);
-    const range = getSheetRange(sheetName, 'append');
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(sheetName)}!${range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+    const fullRange = `${sheetName}!${range}`;
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(fullRange)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
     const resp = await fetch(url, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ values: values, majorDimension: "ROWS" })
     });
+    if (!resp.ok) {
+      const errText = await resp.text();
+      console.error("GG Sheets Error:", errText);
+      throw new Error(`GG API Error ${resp.status}: ${errText}`);
+    }
     return resp.ok;
   } catch (err) {
     console.error("Lỗi appendSheetData:", err);
+    if ((err.message === 'Failed to fetch' || err.message.includes('NetworkError')) && !bypassQueue) {
+      console.warn('[Network] Lỗi mạng khi fetch, lưu vào hàng đợi cục bộ...');
+      await queueOfflineRequest('APPEND', sheetName, values);
+      return true;
+    }
     return false;
   }
 }

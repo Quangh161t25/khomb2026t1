@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import {
@@ -140,9 +140,9 @@ export default function HangHoanDrawer({
         if (!mdh && match.mdh) setMdh(match.mdh);
         if (match.ngay) setNgayNhan(toYMD(match.ngay) || getTodayYmd());
         
-        let finalSku = match.sku_shop_up || match.id_sp || '';
-        let finalTenSp = match.ten_sp || '';
         const skuCtVal = match.id_sp_ct || '';
+        let finalSku = skuCtVal ? skuCtVal.substring(0, 4) : (match.sku_shop_up || match.id_sp || '');
+        let finalTenSp = match.ten_sp || '';
         
         if (skuCtVal && (!finalSku || !finalTenSp)) {
           const sp = skuCatalog.find((s) => (s.sku_ct || s.id_sp_ct || s.sku_con || '').toLowerCase() === skuCtVal.toLowerCase());
@@ -179,9 +179,9 @@ export default function HangHoanDrawer({
       if (match.mdh) setMdh(match.mdh);
       if (match.ngay) setNgayNhan(toYMD(match.ngay) || getTodayYmd());
       
-      let finalSku = match.sku_shop_up || match.id_sp || '';
-      let finalTenSp = match.ten_sp || '';
       const skuCtVal = match.id_sp_ct || '';
+        let finalSku = skuCtVal ? skuCtVal.substring(0, 4) : (match.sku_shop_up || match.id_sp || '');
+        let finalTenSp = match.ten_sp || '';
       
       if (skuCtVal && (!finalSku || !finalTenSp)) {
         const sp = skuCatalog.find((s) => (s.sku_ct || s.id_sp_ct || s.sku_con || '').toLowerCase() === skuCtVal.toLowerCase());
@@ -229,9 +229,9 @@ export default function HangHoanDrawer({
       if (match.mvd && !mvd) setMvd(match.mvd);
       if (match.ngay) setNgayNhan(toYMD(match.ngay) || getTodayYmd());
       
-      let finalSku = match.sku_shop_up || match.id_sp || '';
-      let finalTenSp = match.ten_sp || '';
       const skuCtVal = match.id_sp_ct || '';
+        let finalSku = skuCtVal ? skuCtVal.substring(0, 4) : (match.sku_shop_up || match.id_sp || '');
+        let finalTenSp = match.ten_sp || '';
       
       if (skuCtVal && (!finalSku || !finalTenSp)) {
         const sp = skuCatalog.find((s) => (s.sku_ct || s.id_sp_ct || s.sku_con || '').toLowerCase() === skuCtVal.toLowerCase());
@@ -279,27 +279,73 @@ export default function HangHoanDrawer({
   // SKU CT auto-suggestions
   const handleSkuCtInput = (val) => {
     setSkuCt(val);
+    if (val) {
+      setSku(val.substring(0, 4));
+    } else {
+      setSku('');
+    }
+
     const q = val.trim().toLowerCase();
     if (!q) {
       setSkuCtSuggestions([]);
       return;
     }
 
-    const matches = skuCatalog
-      .filter((s) => {
-        const ct = (s.sku_ct || s.id_sp_ct || '').toLowerCase();
+    const udctMatches = [];
+    const seen = new Set();
+    
+    for (const item of udctData) {
+      const ct = (item.sku_ct || item.id_sp_ct || '').toLowerCase();
+      const main = (item.sku_shop_up || item.id_sp || '').toLowerCase();
+      const name = (item.ten_sp || '').toLowerCase();
+      
+      if (ct.includes(q) || main.includes(q) || name.includes(q)) {
+        const key = ct || main;
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          udctMatches.push({
+            sku_ct: item.id_sp_ct,
+            sku: item.id_sp || item.sku_shop_up,
+            ten_sp: item.ten_sp
+          });
+          if (udctMatches.length >= 8) break;
+        }
+      }
+    }
+
+    const spMatches = [];
+    if (udctMatches.length < 8) {
+      for (const s of skuCatalog) {
+        const ct = (s.sku_ct || s.id_sp_ct || s.sku_con || '').toLowerCase();
         const main = (s.sku || s.id_sp || '').toLowerCase();
         const name = (s.ten_sp || '').toLowerCase();
-        return ct.includes(q) || main.includes(q) || name.includes(q);
-      })
-      .slice(0, 8);
+        
+        if (ct.includes(q) || main.includes(q) || name.includes(q)) {
+          const key = ct || main;
+          if (key && !seen.has(key)) {
+            seen.add(key);
+            spMatches.push({
+              sku_ct: s.sku_con || '',
+              sku: s.id_sp,
+              ten_sp: s.ten_sp || s.ten
+            });
+            if (udctMatches.length + spMatches.length >= 8) break;
+          }
+        }
+      }
+    }
 
-    setSkuCtSuggestions(matches);
+    setSkuCtSuggestions([...udctMatches, ...spMatches]);
   };
 
   const selectSkuCt = (item) => {
-    setSkuCt(item.sku_ct || item.id_sp_ct || '');
-    if (item.sku || item.id_sp) setSku(item.sku || item.id_sp);
+    const chosenSkuCt = item.sku_ct || item.id_sp_ct || '';
+    setSkuCt(chosenSkuCt);
+    if (chosenSkuCt) {
+      setSku(chosenSkuCt.substring(0, 4));
+    } else if (item.sku || item.id_sp) {
+      setSku(item.sku || item.id_sp);
+    }
     if (item.ten_sp) setTenSp(item.ten_sp);
     setSkuCtSuggestions([]);
   };
@@ -778,3 +824,4 @@ export default function HangHoanDrawer({
     </>
   );
 }
+

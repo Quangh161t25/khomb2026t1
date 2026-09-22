@@ -266,7 +266,7 @@ export default function GlobalSearchModal({
           <Search className="w-5 h-5 text-blue-600 shrink-0" />
           <input
             ref={inputRef}
-            type="text"
+            type="text" autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-form-type="other"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Tìm nhanh modul, báo cáo, cài đặt... (gõ tên hoặc từ khóa)"

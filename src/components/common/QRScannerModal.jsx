@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
-import { X, Camera, SwitchCamera, AlertCircle } from 'lucide-react';
+import { X, Camera, SwitchCamera, AlertCircle, Zap, ZapOff } from 'lucide-react';
+import { playSuccessSound } from '../../utils/audioUtils';
 
 export default function QRScannerModal({
   isOpen,
@@ -13,6 +14,8 @@ export default function QRScannerModal({
   const [currentCameraId, setCurrentCameraId] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
   const [scanning, setScanning] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
+  const [hasFlash, setHasFlash] = useState(false);
   const scannerRef = useRef(null);
   const containerId = 'qr-reader-container';
 
@@ -83,6 +86,7 @@ export default function QRScannerModal({
           if (decodedText) {
             // Vibrate if supported
             if (navigator.vibrate) navigator.vibrate(100);
+            playSuccessSound();
 
             onScanSuccess(decodedText);
             if (!continuous) {
@@ -97,9 +101,31 @@ export default function QRScannerModal({
       );
 
       setScanning(true);
+
+      // Kiểm tra xem camera có hỗ trợ flash không
+      const track = html5QrCode.getRunningTrackCameraCapabilities();
+      if (track && track.torchFeature().isSupported()) {
+         setHasFlash(true);
+         setTorchOn(false);
+      } else {
+         setHasFlash(false);
+      }
     } catch (err) {
       console.error('Lỗi khởi động máy quét:', err);
       setErrorMsg('Không thể mở luồng video từ camera: ' + err.message);
+    }
+  };
+
+  const toggleTorch = async () => {
+    if (!scannerRef.current || !scanning) return;
+    try {
+      const newState = !torchOn;
+      await scannerRef.current.applyVideoConstraints({
+        advanced: [{ torch: newState }]
+      });
+      setTorchOn(newState);
+    } catch (err) {
+      console.error("Lỗi khi bật/tắt flash", err);
     }
   };
 
@@ -113,6 +139,8 @@ export default function QRScannerModal({
       }
       scannerRef.current = null;
       setScanning(false);
+      setTorchOn(false);
+      setHasFlash(false);
     }
   };
 
@@ -137,6 +165,16 @@ export default function QRScannerModal({
             <h3 className="text-sm font-bold text-slate-800">{title}</h3>
           </div>
           <div className="flex items-center gap-1">
+            {hasFlash && (
+              <button
+                type="button"
+                onClick={toggleTorch}
+                title="Bật/Tắt đèn Flash"
+                className={`p-1.5 rounded-lg transition-colors ${torchOn ? 'text-amber-500 bg-amber-50' : 'text-slate-500 hover:text-indigo-600 hover:bg-slate-200'}`}
+              >
+                {torchOn ? <Zap className="w-5 h-5" /> : <ZapOff className="w-5 h-5" />}
+              </button>
+            )}
             {cameras.length > 1 && (
               <button
                 type="button"

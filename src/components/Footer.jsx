@@ -1,2 +1,2 @@
-﻿import Footer from '../layouts/Footer';
+import Footer from '../layouts/Footer';
 export default Footer;

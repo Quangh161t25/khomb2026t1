@@ -166,7 +166,12 @@ export default function HangHoanPage() {
 
   useEffect(() => {
     loadData();
-  }, [loadData]);
+    // Preload for offline suggestions
+    if (navigator.onLine) {
+      ensureSanphamData();
+      ensureUdctData();
+    }
+  }, [loadData, ensureSanphamData, ensureUdctData]);
 
   // Compute Distinct Values for Filters
   const khoList = useMemo(() => {

@@ -218,7 +218,7 @@ export default function SettingsModal() {
                   <div className="relative w-44 sm:w-52">
                     <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
-                      type="text"
+                      type="text" autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-form-type="other"
                       value={searchColumn}
                       onChange={(e) => setSearchColumn(e.target.value)}
                       placeholder="Tìm tên cột..."
@@ -307,7 +307,7 @@ export default function SettingsModal() {
                             <td className="px-2.5 py-1.5 bg-blue-50/20 border-x border-blue-50">
                               <div className="relative flex items-center">
                                 <input
-                                  type="text"
+                                  type="text" autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-form-type="other"
                                   placeholder={col.label}
                                   value={customLabel}
                                   onChange={(e) => setColumnLabel(activeSettingsModule, col.key, e.target.value)}

@@ -5,6 +5,7 @@ import ResizableTh from '../components/common/ResizableTh';
 import { CONFIG } from '../config/config';
 import { fetchSheetData, appendSheetData, deleteSheetRow } from '../services/googleSheetsApi';
 import { toYMD, parseDmyToYmd, formatYmdToDmy, shiftDate } from '../utils/dateUtils';
+import { playSuccessSound, playErrorSound } from '../utils/audioUtils';
 import {
   Search,
   RotateCw,
@@ -210,7 +211,10 @@ export default function BanDonPage() {
     if (!appendQueueRef.current.length) return;
     const rows = appendQueueRef.current.splice(0, appendQueueRef.current.length);
     try {
-      await appendSheetData(`${CONFIG.banDonSheetName}!A:C`, rows);
+      const success = await appendSheetData(CONFIG.banDonSheetName, rows);
+      if (!success) {
+        showToast('Lỗi khi ghi dữ liệu lên Google Sheets.', 'error');
+      }
       setBanDonData((prev) =>
         prev.map((item) => {
           if (item.pending && rows.some((r) => r[2] === item.mvd && r[1] === item.khung_h && r[0] === item.ngay)) {
@@ -240,12 +244,22 @@ export default function BanDonPage() {
     const mvd = addMvd.trim();
     if (!mvd) {
       showToast('Vui lòng nhập MVD.', 'warning');
+      playErrorSound();
       mvdInputRef.current?.focus();
       return;
     }
 
     const ngaySheet = formatYmdToDmy(addNgay || todayStr);
     const khungVal = (addKhung || khungFilter || '').toUpperCase();
+
+    // Check duplicate locally for warning sound (optional, but good for feedback)
+    const isDuplicate = banDonData.some(r => r.mvd === mvd);
+    if (isDuplicate) {
+      playErrorSound();
+      showToast(`Cảnh báo: MVD ${mvd} đã được quét trước đó!`, 'warning');
+    } else {
+      playSuccessSound();
+    }
 
     const tempRow = {
       rowIndex: `pending-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
@@ -330,7 +344,7 @@ export default function BanDonPage() {
             <div className="relative flex-1">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
-                type="text"
+                type="text" autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-form-type="other"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Tìm MVD..."
@@ -439,7 +453,7 @@ export default function BanDonPage() {
                   </td>
                   <td className="p-1.5" style={colStyle('khung_h', 80)}>
                     <input
-                      type="text"
+                      type="text" autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-form-type="other"
                       value={addKhung}
                       onChange={(e) => setAddKhung(e.target.value)}
                       placeholder="Khung H"
@@ -450,7 +464,7 @@ export default function BanDonPage() {
                     <div className="flex items-center gap-1">
                       <input
                         ref={mvdInputRef}
-                        type="text"
+                        type="text" autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-form-type="other"
                         value={addMvd}
                         onChange={(e) => setAddMvd(e.target.value)}
                         onKeyDown={(e) => {

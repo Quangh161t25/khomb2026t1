@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { Package, Tag, ArrowRight } from 'lucide-react';
 import { formatPrice } from '../utils/formatPrice';
 
@@ -21,11 +21,11 @@ export default function ProductCard({ product, onSelect }) {
         </div>
 
         <h4 className="font-bold text-slate-900 text-sm group-hover:text-blue-600 transition-colors line-clamp-2">
-          {product.ten_sp || 'Chưa đặt tên'}
+          {product.ten_sp || 'Chua d?t t�n'}
         </h4>
 
         <div className="mt-3 flex items-center justify-between text-xs">
-          <span className="text-slate-500">Giá bán lẻ:</span>
+          <span className="text-slate-500">Gi� b�n l?:</span>
           <span className="font-bold text-blue-600">
             {formatPrice(product.gia_ban_le || product.gia_ban || 0)}
           </span>
@@ -33,14 +33,14 @@ export default function ProductCard({ product, onSelect }) {
 
         {product.ton_dau !== undefined && (
           <div className="mt-1 flex items-center justify-between text-xs">
-            <span className="text-slate-500">Tồn ban đầu:</span>
+            <span className="text-slate-500">T?n ban d?u:</span>
             <span className="font-semibold text-slate-700">{product.ton_dau}</span>
           </div>
         )}
       </div>
 
       <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-blue-600 font-semibold group-hover:translate-x-0.5 transition-transform">
-        <span>Chi tiết</span>
+        <span>Chi ti?t</span>
         <ArrowRight className="w-3.5 h-3.5" />
       </div>
     </div>
