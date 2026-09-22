@@ -188,50 +188,6 @@ export default function Sidebar({
           ))}
         </div>
 
-        {/* User Info & Settings Footer */}
-        <div className="p-3 border-t border-slate-200 bg-slate-50/70 shrink-0">
-          <div className="flex items-center justify-between gap-1.5">
-            <div
-              onClick={() => openSettings('columns', activeModule)}
-              className="flex items-center gap-2.5 min-w-0 flex-1 p-1 rounded-xl hover:bg-white hover:shadow-2xs cursor-pointer transition-all border border-transparent hover:border-slate-200 group"
-              title="Click để mở Cài đặt kích thước cột & cỡ chữ"
-            >
-              <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 font-black text-xs flex items-center justify-center shrink-0 uppercase group-hover:bg-blue-600 group-hover:text-white transition-colors shadow-2xs">
-                {activeUser?.name?.charAt(0) || activeUser?.id?.charAt(0) || 'U'}
-              </div>
-              {!collapsed && (
-                <div className="min-w-0 text-left">
-                  <p className="text-xs font-bold text-slate-800 truncate group-hover:text-blue-600 transition-colors">
-                    {activeUser?.name || activeUser?.id || 'User'}
-                  </p>
-                  <p className="text-[10px] text-slate-500 uppercase font-semibold truncate flex items-center gap-1">
-                    <UserCheck className="w-3 h-3 text-emerald-500 shrink-0" />
-                    <span className="truncate">{activeUser?.role || 'User'}</span>
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center gap-0.5 shrink-0">
-              <button
-                type="button"
-                onClick={() => openSettings('columns', activeModule)}
-                className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-white hover:shadow-xs rounded-lg transition-all"
-                title="Cài đặt hệ thống, cỡ chữ & kích thước cột"
-              >
-                <Settings className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={logout}
-                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                title="Đăng xuất"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
       </aside>
     </>
   );

@@ -95,36 +95,10 @@ export default function Header({
         </nav>
       </div>
 
-      {/* Center: Quick Global Search Bar */}
-      <div className="hidden md:flex items-center flex-1 max-w-xs mx-3">
-        <button
-          type="button"
-          onClick={onOpenGlobalSearch}
-          className="w-full flex items-center justify-between px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-white hover:border-blue-300 text-slate-400 text-xs transition-all shadow-2xs group"
-        >
-          <div className="flex items-center gap-2">
-            <Search className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 transition-colors" />
-            <span className="truncate text-slate-500 group-hover:text-slate-700">
-              Tìm nhanh toàn hệ thống...
-            </span>
-          </div>
-          <kbd className="hidden lg:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono font-bold bg-white text-slate-400 border border-slate-200 rounded">
-            Ctrl K
-          </kbd>
-        </button>
-      </div>
+      {/* Center: Quick Global Search Bar removed to avoid confusion with module search */}
 
       {/* Right Side: Status Badge, Notifications, Settings, Profile */}
       <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-        {/* Mobile Search Icon */}
-        <button
-          type="button"
-          onClick={onOpenGlobalSearch}
-          className="md:hidden p-2 rounded-xl text-slate-500 hover:text-blue-600 hover:bg-slate-100 transition-colors"
-          title="Tìm kiếm nhanh (Ctrl+K)"
-        >
-          <Search className="w-4 h-4" />
-        </button>
 
         {/* Live Status Pill */}
         <div className="hidden xl:flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200/60 px-2.5 py-1 rounded-full text-[11px] font-bold select-none">
