@@ -237,6 +237,9 @@ export default function HangHoanPage() {
     }).sort((a, b) => toYMD(b.ngay_nhan).localeCompare(toYMD(a.ngay_nhan)));
   }, [data, filters]);
 
+  // Row Selection State
+  const [selectedIds, setSelectedIds] = useState([]);
+
   // Handle Detail Open
   const handleOpenDetail = (item) => {
     ensureSanphamData();
@@ -524,15 +527,23 @@ export default function HangHoanPage() {
     }
   };
 
+  // Helper to get exported data based on selection
+  const getExportData = () => {
+    if (selectedIds.length === 0) {
+      showToast('Vui lòng tích chọn ít nhất 1 dòng để tải Excel!', 'warning');
+      return [];
+    }
+    return filteredData.filter((i) => selectedIds.includes(i.id || i.rowIndex));
+  };
+
   // Excel Export: MVD SKU Tong
   const handleExportSkuTong = () => {
-    if (!filteredData.length) {
-      showToast('Không có dữ liệu hợp lệ để xuất!', 'warning');
-      return;
-    }
+    const dataToExport = getExportData();
+    if (!dataToExport.length) return;
+
     const uniqueKeys = [
       ...new Set(
-        filteredData
+        dataToExport
           .map((item) => `${(item.ngay_nhan || '').toString().trim()}|${(item.mvd || '').toString().trim()}`)
           .filter((k) => k.split('|')[1])
       ),
@@ -543,7 +554,7 @@ export default function HangHoanPage() {
       const [ngay, mvd] = key.split('|');
       const info = skuTongMap.get(key) || { ma_gian: '', skuTong: '' };
       const displayNgay = formatYmdToDmy(ngay) || ngay;
-      const firstRow = filteredData.find(
+      const firstRow = dataToExport.find(
         (item) => (item.ngay_nhan || '').toString().trim() === ngay && (item.mvd || '').toString().trim() === mvd
       ) || {};
       return [displayNgay, mvd, firstRow.mvd_2 || '', info.ma_gian || '', info.skuTong || ''];
@@ -557,16 +568,15 @@ export default function HangHoanPage() {
 
   // Excel Export: Full HH_BH
   const handleExportFull = () => {
-    if (!filteredData.length) {
-      showToast('Không có dữ liệu hợp lệ để xuất!', 'warning');
-      return;
-    }
+    const dataToExport = getExportData();
+    if (!dataToExport.length) return;
+
     const headers = [
       'Ngày nhận', 'MVD', 'MVD 2', 'Mã gian', 'SKU', 'SKU CT', 'SKU tổng', 'SLG', 'Tên SP',
       'Tình trạng', 'Kho', 'Ảnh 1', 'Ảnh 2', 'Ảnh 3', 'Ngày xử lý', 'Ghi chú', 'Trạng thái',
       'SKU-SLG', 'ID NV', 'UDT', 'MVD-Gian', 'LB3', 'ID ĐH', 'ID ĐH CT', 'STT', 'Đánh dấu'
     ];
-    const rows = filteredData.map((item) => {
+    const rows = dataToExport.map((item) => {
       const key = `${(item.ngay_nhan || '').trim()}|${(item.mvd || '').trim()}`;
       const skuTong = skuTongMap.get(key)?.skuTong || '';
       return [
@@ -607,10 +617,8 @@ export default function HangHoanPage() {
 
   // Excel Export: MISA
   const handleExportMisa = () => {
-    if (!filteredData.length) {
-      showToast('Không có dữ liệu hợp lệ để xuất MISA!', 'warning');
-      return;
-    }
+    const dataToExport = getExportData();
+    if (!dataToExport.length) return;
     const headers = [
       'Hiển thị trên sổ', 'Hình thức bán hàng', 'Phương thức thanh toán', 'Kiêm phiếu xuất kho',
       'Lập kèm hóa đơn', 'Đã lập hóa đơn', 'Ngày hạch toán (*)', 'Ngày chứng từ (*)', 'Số chứng từ (*)',
@@ -677,7 +685,7 @@ export default function HangHoanPage() {
       return '';
     };
 
-    const rows = filteredData.map((item) => headers.map((h) => getMisaValue(item, h)));
+    const rows = dataToExport.map((item) => headers.map((h) => getMisaValue(item, h)));
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2, '0')}h${String(now.getMinutes()).padStart(2, '0')}`;
     exportToExcel(`MISA_HH_BH_${filters.to || 'TatCa'}_${timeStr}`, 'MISA', headers, rows);
@@ -711,6 +719,8 @@ export default function HangHoanPage() {
           <HangHoanCardList
             data={filteredData}
             skuTongMap={skuTongMap}
+            selectedIds={selectedIds}
+            setSelectedIds={setSelectedIds}
             onOpenDetail={handleOpenDetail}
             onOpenImagePreview={setPreviewImage}
             loading={loading}
@@ -719,6 +729,8 @@ export default function HangHoanPage() {
           <HangHoanTable
             data={filteredData}
             skuTongMap={skuTongMap}
+            selectedIds={selectedIds}
+            setSelectedIds={setSelectedIds}
             onOpenDetail={handleOpenDetail}
             onOpenImagePreview={setPreviewImage}
             loading={loading}

@@ -6,6 +6,8 @@ export default function HangHoanCardList({
   items,
   data,
   skuTongMap,
+  selectedIds = [],
+  setSelectedIds = () => {},
   onOpenDetail = () => {},
   onOpenImagePreview = () => {},
 }) {
@@ -15,6 +17,26 @@ export default function HangHoanCardList({
   useEffect(() => {
     setDisplayLimit(50);
   }, [list.length]);
+
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedIds(list.map(i => i.id || i.rowIndex));
+    } else {
+      setSelectedIds([]);
+    }
+  };
+
+  const isAllSelected = list.length > 0 && selectedIds.length === list.length;
+
+  const handleSelectRow = (e, item) => {
+    e.stopPropagation();
+    const id = item.id || item.rowIndex;
+    if (e.target.checked) {
+      setSelectedIds(prev => [...prev, id]);
+    } else {
+      setSelectedIds(prev => prev.filter(i => i !== id));
+    }
+  };
 
   if (list.length === 0) {
     return (
@@ -28,6 +50,20 @@ export default function HangHoanCardList({
 
   return (
     <div className="space-y-2.5 p-2 sm:p-3">
+      {/* Select All Checkbox for Mobile */}
+      <div className="flex items-center gap-2 px-1 mb-2">
+        <input 
+          type="checkbox" 
+          id="selectAllMobile"
+          checked={isAllSelected}
+          onChange={handleSelectAll}
+          className="w-4 h-4 cursor-pointer accent-blue-600 rounded border-slate-300"
+        />
+        <label htmlFor="selectAllMobile" className="text-xs font-bold text-slate-600 cursor-pointer">
+          Chọn tất cả ({list.length})
+        </label>
+      </div>
+
       {displayedList.map((item, index) => {
         const imgUrl = (item.anh_3 || item.anh_1 || item.anh_2 || '').trim();
         const displayNgay = formatYmdToDmy(item.ngay_nhan) || item.ngay_nhan;
@@ -35,15 +71,25 @@ export default function HangHoanCardList({
           (item.trang_thai || '').toLowerCase() === 'trả' ||
           (item.trang_thai || '').toLowerCase() === 'tra';
         const maGian = item.ma_gian || 'Chưa có gian';
+        const isSelected = selectedIds.includes(item.id || item.rowIndex);
 
         return (
           <div
             key={item.id ? `${item.id}-${index}` : index}
             onClick={() => onOpenDetail(item, index)}
-            className="bg-white rounded-xl border border-slate-200 p-3 shadow-xs hover:shadow-md hover:border-indigo-300 transition-all cursor-pointer active:scale-[0.99] space-y-1.5"
+            className={`rounded-xl border p-3 shadow-xs hover:shadow-md transition-all cursor-pointer active:scale-[0.99] space-y-1.5 ${
+              isSelected ? 'bg-blue-50/70 border-blue-300' : 'bg-white border-slate-200 hover:border-indigo-300'
+            }`}
           >
-            {/* Dòng 1: MVD in đậm nổi bật + MVD 2 (cùng 1 hàng, không ngắt dòng) */}
+            {/* Dòng 1: Checkbox + MVD in đậm nổi bật + MVD 2 (cùng 1 hàng, không ngắt dòng) */}
             <div className="flex items-center gap-2 border-b border-slate-100 pb-1.5 overflow-x-auto no-scrollbar whitespace-nowrap">
+              <input 
+                type="checkbox" 
+                checked={isSelected}
+                onChange={(e) => handleSelectRow(e, item)}
+                onClick={(e) => e.stopPropagation()}
+                className="w-4 h-4 cursor-pointer accent-blue-600 rounded border-slate-300 shrink-0"
+              />
               <span className="font-bold text-sm text-slate-900 tracking-tight select-all shrink-0">
                 {item.mvd || 'Không có MVD'}
               </span>

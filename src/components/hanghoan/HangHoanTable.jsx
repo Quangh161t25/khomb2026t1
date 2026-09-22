@@ -10,6 +10,8 @@ export default function HangHoanTable({
   items,
   data,
   skuTongMap,
+  selectedIds = [],
+  setSelectedIds = () => {},
   onOpenDetail = () => {},
   onOpenImagePreview = () => {},
 }) {
@@ -40,6 +42,26 @@ export default function HangHoanTable({
     return list.slice(start, start + pageSize);
   }, [list, currentPage, pageSize]);
 
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedIds(list.map(i => i.id || i.rowIndex));
+    } else {
+      setSelectedIds([]);
+    }
+  };
+
+  const isAllSelected = list.length > 0 && selectedIds.length === list.length;
+
+  const handleSelectRow = (e, item) => {
+    e.stopPropagation();
+    const id = item.id || item.rowIndex;
+    if (e.target.checked) {
+      setSelectedIds(prev => [...prev, id]);
+    } else {
+      setSelectedIds(prev => prev.filter(i => i !== id));
+    }
+  };
+
   if (list.length === 0) {
     return (
       <div className="p-8 text-center text-slate-400 text-sm bg-white rounded-2xl border border-slate-200">
@@ -54,6 +76,14 @@ export default function HangHoanTable({
         <table className="w-full min-w-[980px] border-collapse text-left text-xs">
           <thead className="bg-slate-100 text-slate-700 text-xs font-bold uppercase sticky top-0 z-10 select-none shadow-2xs">
             <tr>
+              <th className="px-3 py-2 text-center w-10 min-w-[40px] max-w-[40px] sticky left-0 z-20 bg-slate-100 border-r border-slate-200">
+                <input 
+                  type="checkbox" 
+                  checked={isAllSelected}
+                  onChange={handleSelectAll}
+                  className="w-4 h-4 cursor-pointer accent-blue-600 rounded border-slate-300"
+                />
+              </th>
               <ResizableTh moduleId="hang_hoan" columnKey="ngay_nhan" defaultWidth={100} align="center">Ngày nhận</ResizableTh>
               <ResizableTh moduleId="hang_hoan" columnKey="mvd" defaultWidth={150} align="left">MVD</ResizableTh>
               <ResizableTh moduleId="hang_hoan" columnKey="mvd_2" defaultWidth={150} align="left">MVD 2</ResizableTh>
@@ -80,13 +110,23 @@ export default function HangHoanTable({
               const bucket = skuTongMap?.get(key);
               const skuTong = bucket?.skuTong || item.sku_tong || '-';
               const maGian = item.ma_gian || '';
+              
+              const isSelected = selectedIds.includes(item.id || item.rowIndex);
 
               return (
                 <tr
                   key={item.id ? `${item.id}-${index}` : index}
                   onClick={() => onOpenDetail(item, index)}
-                  className="hover:bg-blue-50/50 cursor-pointer transition-colors"
+                  className={`cursor-pointer transition-colors ${isSelected ? 'bg-blue-50/70 hover:bg-blue-100/70' : 'hover:bg-blue-50/50'}`}
                 >
+                  <td className="px-3 py-2 text-center sticky left-0 z-10 border-r border-slate-100 bg-inherit" onClick={e => e.stopPropagation()}>
+                    <input 
+                      type="checkbox" 
+                      checked={isSelected}
+                      onChange={(e) => handleSelectRow(e, item)}
+                      className="w-4 h-4 cursor-pointer accent-blue-600 rounded border-slate-300"
+                    />
+                  </td>
                   <td
                     className="px-3 py-2 text-center text-slate-700 whitespace-nowrap font-medium overflow-hidden text-ellipsis"
                     style={colStyle('ngay_nhan', 100)}
