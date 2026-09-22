@@ -76,7 +76,7 @@ export default function HangHoanTable({
         <table className="w-full min-w-[980px] border-collapse text-left text-xs">
           <thead className="bg-slate-100 text-slate-700 text-xs font-bold uppercase sticky top-0 z-10 select-none shadow-2xs">
             <tr>
-              <th className="px-3 py-2 text-center w-10 min-w-[40px] max-w-[40px] sticky left-0 z-20 bg-slate-100 border-r border-slate-200">
+              <th className="px-3 py-2 text-center w-10 min-w-[40px] max-w-[40px] border-r border-slate-200">
                 <input 
                   type="checkbox" 
                   checked={isAllSelected}
@@ -119,7 +119,7 @@ export default function HangHoanTable({
                   onClick={() => onOpenDetail(item, index)}
                   className={`cursor-pointer transition-colors ${isSelected ? 'bg-blue-50/70 hover:bg-blue-100/70' : 'hover:bg-blue-50/50'}`}
                 >
-                  <td className="px-3 py-2 text-center sticky left-0 z-10 border-r border-slate-100 bg-inherit" onClick={e => e.stopPropagation()}>
+                  <td className="px-3 py-2 text-center border-r border-slate-100" onClick={e => e.stopPropagation()}>
                     <input 
                       type="checkbox" 
                       checked={isSelected}
