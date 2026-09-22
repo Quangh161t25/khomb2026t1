@@ -54,9 +54,9 @@ export default function HangHoanPage() {
   // Image Preview Modal
   const [previewImage, setPreviewImage] = useState('');
 
-  // QR Scanner Modal
   const [scannerOpen, setScannerOpen] = useState(false);
   const [continuousScanOpen, setContinuousScanOpen] = useState(false);
+  const [drawerScanCallback, setDrawerScanCallback] = useState(null);
 
   const setViewModeAndSave = (mode) => {
     setViewMode(mode);
@@ -733,6 +733,7 @@ export default function HangHoanPage() {
         onDelete={handleDelete}
         onCopy={handleCopy}
         onOpenImagePreview={setPreviewImage}
+        onOpenQrScan={(callback) => setDrawerScanCallback(() => callback)}
       />
 
       {/* Image Preview Modal */}
@@ -751,6 +752,17 @@ export default function HangHoanPage() {
           setFilters((prev) => ({ ...prev, search: val }));
           setScannerOpen(false);
           showToast(`Đã tìm kiếm theo mã: ${val}`, 'info');
+        }}
+      />
+
+      {/* QR Scanner for Drawer Form */}
+      <QRScannerModal
+        isOpen={Boolean(drawerScanCallback)}
+        title="Quét mã MVD / Barcode"
+        onClose={() => setDrawerScanCallback(null)}
+        onScanSuccess={(val) => {
+          if (drawerScanCallback) drawerScanCallback(val);
+          setDrawerScanCallback(null);
         }}
       />
 
