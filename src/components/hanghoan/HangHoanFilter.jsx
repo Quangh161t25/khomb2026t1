@@ -205,7 +205,6 @@ export default function HangHoanFilter(props) {
   const hasAdvancedFilters = currentKho !== '' || currentTrangThai !== '' || currentMaGian !== '';
 
   return (
-  return (
     <div className="p-2.5 sm:p-3 border-b border-slate-200 bg-white rounded-2xl shadow-xs relative">
       {/* Main Toolbar */}
       <div className="flex flex-wrap items-center gap-2 lg:gap-3">
