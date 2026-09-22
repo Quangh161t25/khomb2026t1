@@ -182,20 +182,26 @@ export default function HangHoanPage() {
 
       const key = `${ngay}|${mvd}`;
       if (!byMvd.has(key)) {
-        byMvd.set(key, { ma_gian: '', items: [] });
+        byMvd.set(key, { ma_gian: '', skuMap: new Map() });
       }
       const bucket = byMvd.get(key);
       if (!bucket.ma_gian && item.ma_gian) bucket.ma_gian = (item.ma_gian || '').toString().trim();
 
       const skuVal = (item.sku || '').toString().trim();
       if (!skuVal) return;
-      const slgVal = (item.slg || '0').toString().trim();
-      bucket.items.push(`${skuVal} x ${slgVal}`);
+      const slgVal = parseFloat(item.slg) || 0;
+      
+      const currentSlg = bucket.skuMap.get(skuVal) || 0;
+      bucket.skuMap.set(skuVal, currentSlg + slgVal);
     });
 
     const result = new Map();
     byMvd.forEach((bucket, key) => {
-      const skuTong = bucket.items.join(' + ');
+      const items = [];
+      bucket.skuMap.forEach((qty, sku) => {
+        items.push(`${sku} x ${qty}`);
+      });
+      const skuTong = items.join(' + ');
       result.set(key, { ma_gian: bucket.ma_gian || '', skuTong });
     });
     return result;
