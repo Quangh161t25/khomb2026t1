@@ -10,6 +10,7 @@ import {
   QrCode,
   FileSpreadsheet,
   FileCode2,
+  Trash2,
 } from 'lucide-react';
 import { toYMD, shiftDate } from '../../utils/dateUtils';
 
@@ -21,6 +22,8 @@ export default function HangHoanFilter(props) {
     khoList = [],
     maGianList = [],
     totalCount,
+    selectedCount = 0,
+    onDeleteSelected = () => {},
     onReload,
     onOpenCreate,
     onStartScanMvd,
@@ -347,33 +350,46 @@ export default function HangHoanFilter(props) {
           </button>
         </div>
 
-        {/* Excel & MISA export buttons */}
-        <button
-          type="button"
-          onClick={handleExportFull}
-          className="hidden lg:flex items-center justify-center gap-1.5 bg-emerald-600 text-white font-bold px-3.5 py-2 rounded-xl text-xs hover:bg-emerald-700 transition-all shadow-xs cursor-pointer"
-        >
-          <FileSpreadsheet className="w-4 h-4" />
-          <span>Excel Full</span>
-        </button>
+        {/* Export and Delete buttons (Only show if items are selected) */}
+        {selectedCount > 0 && (
+          <div className="flex flex-wrap gap-2 w-full lg:w-auto">
+            <button
+              type="button"
+              onClick={onDeleteSelected}
+              className="flex items-center justify-center gap-1.5 bg-rose-600 text-white font-bold px-3.5 py-2 rounded-xl text-xs hover:bg-rose-700 transition-all shadow-xs cursor-pointer"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Xóa ({selectedCount})</span>
+            </button>
 
-        <button
-          type="button"
-          onClick={handleExportSku}
-          className="hidden lg:flex items-center justify-center gap-1.5 bg-teal-600 text-white font-bold px-3.5 py-2 rounded-xl text-xs hover:bg-teal-700 transition-all shadow-xs cursor-pointer"
-        >
-          <FileSpreadsheet className="w-4 h-4" />
-          <span>Excel SKU Tổng</span>
-        </button>
+            <button
+              type="button"
+              onClick={handleExportFull}
+              className="flex items-center justify-center gap-1.5 bg-emerald-600 text-white font-bold px-3.5 py-2 rounded-xl text-xs hover:bg-emerald-700 transition-all shadow-xs cursor-pointer"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              <span>Excel Full</span>
+            </button>
 
-        <button
-          type="button"
-          onClick={handleExportMisaAction}
-          className="hidden lg:flex items-center justify-center gap-1.5 bg-amber-500 text-white font-bold px-4 py-2 rounded-xl text-xs hover:bg-amber-600 transition-all shadow-xs cursor-pointer"
-        >
-          <FileCode2 className="w-4 h-4" />
-          <span>MISA</span>
-        </button>
+            <button
+              type="button"
+              onClick={handleExportSku}
+              className="flex items-center justify-center gap-1.5 bg-teal-600 text-white font-bold px-3.5 py-2 rounded-xl text-xs hover:bg-teal-700 transition-all shadow-xs cursor-pointer"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              <span>Excel SKU Tổng</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleExportMisaAction}
+              className="flex items-center justify-center gap-1.5 bg-amber-500 text-white font-bold px-4 py-2 rounded-xl text-xs hover:bg-amber-600 transition-all shadow-xs cursor-pointer"
+            >
+              <FileCode2 className="w-4 h-4" />
+              <span>MISA</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

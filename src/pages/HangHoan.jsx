@@ -467,6 +467,41 @@ export default function HangHoanPage() {
     }
   };
 
+  // Bulk Delete
+  const handleDeleteSelected = async () => {
+    if (selectedIds.length === 0) return;
+    if (user?.role === 'kinhdoanh') {
+      showToast('Tài khoản KINHDOANH không có quyền xóa.', 'error');
+      return;
+    }
+    const confirmMsg = `Bạn có chắc chắn muốn xóa ${selectedIds.length} dòng Hàng hoàn đã chọn? Hành động này không thể hoàn tác!`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      setLoading(true);
+      const indicesToDelete = selectedIds
+        .map(id => {
+          const item = filteredData.find(i => (i.id || i.rowIndex) === id);
+          return item ? item.rowIndex : null;
+        })
+        .filter(Boolean)
+        .sort((a, b) => b - a); // Sort descending to safely delete from bottom up
+
+      for (const rowIndex of indicesToDelete) {
+        await deleteSheetRow(CONFIG.hhbhSheetName, rowIndex);
+      }
+      
+      showToast(`Đã xóa thành công ${indicesToDelete.length} dòng!`, 'success');
+      setSelectedIds([]); // Clear selection after delete
+      loadData();
+    } catch (err) {
+      console.error('Error bulk deleting Hang Hoan rows:', err);
+      showToast('Lỗi khi xóa nhiều dòng: ' + err.message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Quick Append via Continuous Scanner
   const handleQuickAppendMvd = async (mvdRaw) => {
     const mvd = (mvdRaw || '').toString().trim();
@@ -703,6 +738,8 @@ export default function HangHoanPage() {
         viewMode={viewMode}
         setViewMode={setViewModeAndSave}
         totalCount={filteredData.length}
+        selectedCount={selectedIds.length}
+        onDeleteSelected={handleDeleteSelected}
         onOpenCreate={handleOpenCreate}
         onStartScanMvd={() => setContinuousScanOpen(true)}
         onScanFilterQr={() => setScannerOpen(true)}
