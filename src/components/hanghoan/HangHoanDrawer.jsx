@@ -1,0 +1,657 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
+import {
+  X,
+  Camera,
+  Copy,
+  Trash2,
+  Image as ImageIcon,
+  History,
+  AlertTriangle,
+  Loader2,
+} from 'lucide-react';
+import { getTodayYmd, shiftDate, formatYmdToDmy } from '../../utils/dateUtils';
+import { CONFIG } from '../../config/config';
+
+export default function HangHoanDrawer({
+  isOpen,
+  mode = 'create', // 'create' | 'edit' | 'copy'
+  initialData = null,
+  onClose,
+  onSave,
+  onDelete,
+  onCopy,
+  skuCatalog = [],
+  udctData = [],
+  onOpenQrScan,
+}) {
+  const { currentUser } = useAuth();
+  const toast = useToast();
+  const isKinhDoanh = currentUser?.role === 'kinhdoanh';
+
+  // Form State
+  const [mvd, setMvd] = useState('');
+  const [mvd2, setMvd2] = useState('');
+  const [maGian, setMaGian] = useState('');
+  const [sku, setSku] = useState('');
+  const [skuCt, setSkuCt] = useState('');
+  const [slg, setSlg] = useState(1);
+  const [hoanTra, setHoanTra] = useState('Hoàn');
+  const [kho, setKho] = useState('KHO');
+  const [tinhTrang, setTinhTrang] = useState('');
+  const [tenSp, setTenSp] = useState('');
+  const [ngayNhan, setNgayNhan] = useState(getTodayYmd());
+  const [mdh, setMdh] = useState('');
+  const [anh1, setAnh1] = useState('');
+  const [anh2, setAnh2] = useState('');
+  const [anh3, setAnh3] = useState('');
+  const [historyText, setHistoryText] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [duplicateMvdNotice, setDuplicateMvdNotice] = useState('');
+
+  // Suggestions state
+  const [skuCtSuggestions, setSkuCtSuggestions] = useState([]);
+  const [mvd2Suggestions, setMvd2Suggestions] = useState([]);
+  const [mdhSuggestions, setMdhSuggestions] = useState([]);
+
+  // Viewport keyboard sync ref
+  const drawerRef = useRef(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (initialData && (mode === 'edit' || mode === 'copy')) {
+      setMvd(initialData.mvd || '');
+      setMvd2(initialData.mvd_2 || '');
+      setMaGian(initialData.ma_gian || '');
+      setSku(initialData.sku || '');
+      setSkuCt(mode === 'copy' ? '' : initialData.sku_ct || '');
+      setSlg(parseFloat(initialData.slg) || 1);
+      setHoanTra(initialData.trang_thai || 'Hoàn');
+      setKho(initialData.kho || 'KHO');
+      setTinhTrang(initialData.tinh_trang || '');
+      setTenSp(initialData.ten_sp || '');
+      setNgayNhan(initialData.ngay_nhan || getTodayYmd());
+      setMdh(initialData.id_dh || '');
+      setAnh1(initialData.anh_1 || '');
+      setAnh2(initialData.anh_2 || '');
+      setAnh3(initialData.anh_3 || '');
+      setHistoryText(initialData.ghi_chu || '');
+    } else {
+      // Create mode
+      setMvd('');
+      setMvd2('');
+      setMaGian('');
+      setSku('');
+      setSkuCt('');
+      setSlg(1);
+      setHoanTra('Hoàn');
+      setKho('KHO');
+      setTinhTrang('');
+      setTenSp('');
+      setNgayNhan(getTodayYmd());
+      setMdh('');
+      setAnh1('');
+      setAnh2('');
+      setAnh3('');
+      setHistoryText('');
+    }
+
+    setDuplicateMvdNotice('');
+    setSkuCtSuggestions([]);
+    setMvd2Suggestions([]);
+    setMdhSuggestions([]);
+  }, [isOpen, initialData, mode]);
+
+  // Mobile virtual keyboard resize sync
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleResize = () => {
+      if (window.visualViewport && drawerRef.current) {
+        drawerRef.current.style.height = `${window.visualViewport.height}px`;
+        drawerRef.current.style.top = `${window.visualViewport.offsetTop}px`;
+      }
+    };
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleResize);
+      window.visualViewport.addEventListener('scroll', handleResize);
+      handleResize();
+    }
+
+    return () => {
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleResize);
+        window.visualViewport.removeEventListener('scroll', handleResize);
+      }
+    };
+  }, [isOpen]);
+
+  // MVD change & duplicate / auto-fill check
+  const handleMvdChange = (val) => {
+    setMvd(val);
+    const cleanVal = val.trim();
+    if (!cleanVal) {
+      setDuplicateMvdNotice('');
+      return;
+    }
+
+    // Auto-fill from UD_CT if matching
+    const match = udctData.find(
+      (u) => (u.mvd || '').trim().toLowerCase() === cleanVal.toLowerCase()
+    );
+    if (match && mode === 'create') {
+      if (match.ma_gian) setMaGian(match.ma_gian);
+      if (match.mdh) setMdh(match.mdh);
+      if (match.sku_shop_up || match.id_sp) setSku(match.sku_shop_up || match.id_sp);
+      if (match.id_sp_ct) setSkuCt(match.id_sp_ct);
+      if (match.ten_sp) setTenSp(match.ten_sp);
+      if (match.so_luong) setSlg(parseFloat(match.so_luong) || 1);
+      setHoanTra('Hoàn');
+    }
+  };
+
+  // SKU CT auto-suggestions
+  const handleSkuCtInput = (val) => {
+    setSkuCt(val);
+    const q = val.trim().toLowerCase();
+    if (!q) {
+      setSkuCtSuggestions([]);
+      return;
+    }
+
+    const matches = skuCatalog
+      .filter((s) => {
+        const ct = (s.sku_ct || s.id_sp_ct || '').toLowerCase();
+        const main = (s.sku || s.id_sp || '').toLowerCase();
+        const name = (s.ten_sp || '').toLowerCase();
+        return ct.includes(q) || main.includes(q) || name.includes(q);
+      })
+      .slice(0, 8);
+
+    setSkuCtSuggestions(matches);
+  };
+
+  const selectSkuCt = (item) => {
+    setSkuCt(item.sku_ct || item.id_sp_ct || '');
+    if (item.sku || item.id_sp) setSku(item.sku || item.id_sp);
+    if (item.ten_sp) setTenSp(item.ten_sp);
+    setSkuCtSuggestions([]);
+  };
+
+  // Image Upload handler (Convert to base64 or upload to ImgBB)
+  const handleImageUpload = async (e, slot) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Direct Base64 preview or ImgBB upload
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64Data = event.target.result;
+      if (slot === 1) setAnh1(base64Data);
+      if (slot === 2) setAnh2(base64Data);
+      if (slot === 3) setAnh3(base64Data);
+
+      // Attempt ImgBB upload in background for permanent link
+      try {
+        const formData = new FormData();
+        formData.append('image', file);
+        const res = await fetch(
+          `https://api.imgbb.com/1/upload?key=${CONFIG.imgbbApiKey}`,
+          { method: 'POST', body: formData }
+        );
+        const json = await res.json();
+        if (json?.data?.url) {
+          if (slot === 1) setAnh1(json.data.url);
+          if (slot === 2) setAnh2(json.data.url);
+          if (slot === 3) setAnh3(json.data.url);
+        }
+      } catch (err) {
+        console.warn('ImgBB upload error, using local data:', err);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!mvd.trim()) {
+      toast.warning('Vui lòng nhập Mã vận đơn (MVD)');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const payload = {
+        id: initialData?.id || `HH-${Date.now()}`,
+        rowIndex: initialData?.rowIndex || null,
+        ngay_nhan: ngayNhan,
+        mvd: mvd.trim(),
+        mvd_2: mvd2.trim(),
+        ma_gian: maGian.trim(),
+        sku: sku.trim(),
+        sku_ct: skuCt.trim(),
+        slg: slg,
+        ten_sp: tenSp.trim(),
+        kho: kho,
+        tinh_trang: tinhTrang.trim(),
+        trang_thai: hoanTra,
+        anh_1: anh1,
+        anh_2: anh2,
+        anh_3: anh3,
+        id_dh: mdh.trim(),
+        ghi_chu: historyText,
+      };
+
+      await onSave(payload, mode);
+      onClose();
+    } catch (err) {
+      toast.error('Lỗi khi lưu: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <>
+      {/* Overlay Backdrop */}
+      <div
+        className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs transition-opacity"
+        onClick={onClose}
+      />
+
+      {/* Drawer Container */}
+      <div
+        ref={drawerRef}
+        className="fixed top-0 right-0 bottom-0 z-50 w-full max-w-md bg-white shadow-2xl flex flex-col transition-all duration-300 animate-in slide-in-from-right"
+      >
+        {/* Drawer Header */}
+        <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
+          <div>
+            <h3 className="text-sm font-bold text-slate-900">
+              {mode === 'create'
+                ? 'Thêm sản phẩm hàng hoàn'
+                : mode === 'copy'
+                ? 'Sao chép hàng hoàn'
+                : 'Chi tiết hàng hoàn'}
+            </h3>
+            <p className="text-[10px] text-slate-500 mt-0.5 uppercase font-medium">
+              Row ID: {initialData?.id || (mode === 'create' ? `NEW-${Date.now()}` : '-')}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            {mode === 'edit' && !isKinhDoanh && (
+              <button
+                type="button"
+                onClick={() => onCopy(initialData)}
+                className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 rounded-lg text-xs font-semibold transition-all"
+                title="Sao chép đơn này"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                <span>Copy</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Drawer Body Form */}
+        <div className="flex-1 overflow-y-auto p-3.5 space-y-3 custom-scrollbar">
+          <div className="grid grid-cols-2 gap-2.5">
+            {/* MVD */}
+            <div className="col-span-2">
+              <label className="block text-[10.5px] font-bold text-slate-500 uppercase mb-1">MVD</label>
+              <div className="flex gap-1.5">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    required
+                    value={mvd}
+                    onChange={(e) => handleMvdChange(e.target.value)}
+                    placeholder="Mã vận đơn chính..."
+                    className="w-full pl-3 pr-8 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                  {mvd && (
+                    <button
+                      type="button"
+                      onClick={() => setMvd('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onOpenQrScan((code) => handleMvdChange(code))}
+                  className="px-3 py-2 border border-slate-200 rounded-lg text-xs bg-slate-50 hover:bg-slate-100 font-bold flex items-center gap-1 shrink-0"
+                >
+                  <Camera className="w-4 h-4 text-indigo-600" />
+                  <span>QR</span>
+                </button>
+              </div>
+            </div>
+
+            {/* MVD 2 */}
+            <div className="col-span-2">
+              <label className="block text-[10.5px] font-bold text-slate-500 uppercase mb-1">MVD 2 (Mã phụ)</label>
+              <div className="flex gap-1.5">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={mvd2}
+                    onChange={(e) => setMvd2(e.target.value)}
+                    placeholder="Mã vận đơn 2..."
+                    className="w-full pl-3 pr-8 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                  {mvd2 && (
+                    <button
+                      type="button"
+                      onClick={() => setMvd2('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onOpenQrScan((code) => setMvd2(code))}
+                  className="px-3 py-2 border border-slate-200 rounded-lg text-xs bg-slate-50 hover:bg-slate-100 font-bold flex items-center gap-1 shrink-0"
+                >
+                  <Camera className="w-4 h-4 text-indigo-600" />
+                  <span>QR</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Mã gian */}
+            <div>
+              <label className="block text-[10.5px] font-bold text-slate-500 uppercase mb-1">Mã gian</label>
+              <input
+                type="text"
+                value={maGian}
+                onChange={(e) => setMaGian(e.target.value)}
+                placeholder="Mã gian..."
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
+
+            {/* SKU CT with Auto-suggestions */}
+            <div className="relative">
+              <label className="block text-[10.5px] font-bold text-slate-500 uppercase mb-1">SKU CT</label>
+              <input
+                type="text"
+                value={skuCt}
+                onChange={(e) => handleSkuCtInput(e.target.value)}
+                placeholder="SKU chi tiết..."
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-bold text-indigo-700 outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+
+              {skuCtSuggestions.length > 0 && (
+                <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto">
+                  {skuCtSuggestions.map((item, i) => (
+                    <div
+                      key={i}
+                      onClick={() => selectSkuCt(item)}
+                      className="p-2 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-0 text-xs"
+                    >
+                      <div className="font-bold text-indigo-700">{item.sku_ct || item.id_sp_ct}</div>
+                      <div className="text-[10px] text-slate-500 truncate">{item.ten_sp || item.sku}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* SKU */}
+            <div>
+              <label className="block text-[10.5px] font-bold text-slate-500 uppercase mb-1">SKU</label>
+              <input
+                type="text"
+                value={sku}
+                onChange={(e) => setSku(e.target.value)}
+                placeholder="Mã SKU..."
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs text-slate-700 bg-slate-50 outline-none"
+              />
+            </div>
+
+            {/* SLG with Steppers */}
+            <div>
+              <label className="block text-[10.5px] font-bold text-slate-500 uppercase mb-1">Số lượng</label>
+              <div className="flex items-center">
+                <button
+                  type="button"
+                  onClick={() => setSlg((prev) => Math.max(1, prev - 1))}
+                  className="w-8 h-8 flex items-center justify-center border border-slate-200 rounded-l-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
+                >
+                  -
+                </button>
+                <input
+                  type="number"
+                  min="1"
+                  value={slg}
+                  onChange={(e) => setSlg(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="flex-1 w-full h-8 text-center border-y border-slate-200 text-xs font-bold text-slate-900 outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setSlg((prev) => prev + 1)}
+                  className="w-8 h-8 flex items-center justify-center border border-slate-200 rounded-r-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            {/* Hoàn / Trả */}
+            <div>
+              <label className="block text-[10.5px] font-bold text-slate-500 uppercase mb-1">Trạng thái</label>
+              <div className="flex items-center h-8 p-0.5 border border-slate-200 rounded-lg bg-slate-100 gap-1">
+                {['Hoàn', 'Trả'].map((ht) => (
+                  <button
+                    key={ht}
+                    type="button"
+                    onClick={() => setHoanTra(ht)}
+                    className={`flex-1 h-full rounded text-xs font-bold transition-all ${
+                      hoanTra === ht
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    {ht}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Kho */}
+            <div>
+              <label className="block text-[10.5px] font-bold text-slate-500 uppercase mb-1">Kho</label>
+              <div className="flex items-center h-8 p-0.5 border border-slate-200 rounded-lg bg-slate-100 gap-1">
+                {['KHO', 'BH'].map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setKho(k)}
+                    className={`flex-1 h-full rounded text-xs font-bold transition-all ${
+                      kho === k
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    {k}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Tình trạng */}
+            <div className="col-span-2">
+              <label className="block text-[10.5px] font-bold text-slate-500 uppercase mb-1">Tình trạng</label>
+              <input
+                type="text"
+                value={tinhTrang}
+                onChange={(e) => setTinhTrang(e.target.value)}
+                placeholder="Tình trạng hàng (vd: nguyên seal, vỡ vỏ, móp méo...)"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
+
+            {/* Tên SP */}
+            <div className="col-span-2">
+              <label className="block text-[10.5px] font-bold text-slate-500 uppercase mb-1">Tên sản phẩm</label>
+              <input
+                type="text"
+                value={tenSp}
+                onChange={(e) => setTenSp(e.target.value)}
+                placeholder="Tên sản phẩm..."
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
+
+            {/* Ngày nhận with Steppers */}
+            <div className="col-span-2">
+              <label className="block text-[10.5px] font-bold text-slate-500 uppercase mb-1">Ngày nhận</label>
+              <div className="flex items-center">
+                <button
+                  type="button"
+                  onClick={() => setNgayNhan((prev) => shiftDate(prev, -1))}
+                  className="w-8 h-8 flex items-center justify-center border border-slate-200 rounded-l-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
+                >
+                  -
+                </button>
+                <input
+                  type="date"
+                  value={ngayNhan}
+                  onChange={(e) => setNgayNhan(e.target.value)}
+                  className="flex-1 w-full h-8 text-center border-y border-slate-200 text-xs font-semibold text-slate-800 outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setNgayNhan((prev) => shiftDate(prev, 1))}
+                  className="w-8 h-8 flex items-center justify-center border border-slate-200 rounded-r-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            {/* MDH */}
+            <div className="col-span-2">
+              <label className="block text-[10.5px] font-bold text-slate-500 uppercase mb-1">MDH (Mã đơn hàng)</label>
+              <input
+                type="text"
+                value={mdh}
+                onChange={(e) => setMdh(e.target.value)}
+                placeholder="Mã đơn hàng..."
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
+
+            {/* 3 Real Photos Upload */}
+            <div className="col-span-2 space-y-1.5 pt-1">
+              <div className="text-[10.5px] font-bold text-slate-500 uppercase">Ảnh thực tế (Tối đa 3 ảnh)</div>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { slot: 1, val: anh1, setter: setAnh1 },
+                  { slot: 2, val: anh2, setter: setAnh2 },
+                  { slot: 3, val: anh3, setter: setAnh3 },
+                ].map(({ slot, val, setter }) => (
+                  <div key={slot} className="relative aspect-square">
+                    {val ? (
+                      <div className="relative w-full h-full group rounded-lg overflow-hidden border border-slate-200">
+                        <img src={val} alt={`Ảnh ${slot}`} className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setter('')}
+                          className="absolute top-1 right-1 bg-rose-600 text-white p-1 rounded-full shadow-md hover:bg-rose-700 transition-colors"
+                          title="Xóa ảnh"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="w-full h-full flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-lg bg-slate-50 hover:bg-blue-50 hover:border-blue-300 transition-colors cursor-pointer p-2 text-center">
+                        <Camera className="w-5 h-5 text-slate-400" />
+                        <span className="text-[9px] font-bold text-slate-400 mt-1">Ảnh {slot}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={(e) => handleImageUpload(e, slot)}
+                          className="hidden"
+                        />
+                      </label>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* History text */}
+            {historyText && (
+              <div className="col-span-2 mt-2 pt-2 border-t border-slate-100">
+                <div className="flex items-center gap-1.5 text-[10.5px] font-bold text-slate-500 uppercase mb-1">
+                  <History className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>Lịch sử chỉnh sửa</span>
+                </div>
+                <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-200 text-[11px] text-slate-600 max-h-28 overflow-y-auto whitespace-pre-line font-mono">
+                  {historyText}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Drawer Sticky Bottom Footer */}
+        <div className="p-2.5 sm:p-3 border-t border-slate-200 flex items-center gap-2 bg-white shrink-0 sticky bottom-0 z-20 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={saving}
+            className="flex-1 bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-bold py-2 px-3 rounded-lg text-sm transition-all shadow-md shadow-blue-500/20 flex items-center justify-center gap-2 disabled:opacity-60"
+          >
+            {saving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Đang lưu...</span>
+              </>
+            ) : (
+              <span>{mode === 'create' || mode === 'copy' ? 'Thêm mới' : 'Lưu thay đổi'}</span>
+            )}
+          </button>
+
+          {mode === 'edit' && !isKinhDoanh && (
+            <button
+              type="button"
+              onClick={() => onDelete(initialData)}
+              className="px-3 py-2 bg-rose-50 border border-rose-200 text-rose-600 font-bold rounded-lg hover:bg-rose-100 active:bg-rose-200 transition-all text-sm"
+            >
+              Xóa
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 border border-slate-200 text-slate-600 font-bold rounded-lg hover:bg-slate-50 transition-all text-sm"
+          >
+            Hủy
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
