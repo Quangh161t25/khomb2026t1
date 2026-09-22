@@ -205,68 +205,28 @@ export default function HangHoanFilter(props) {
   const hasAdvancedFilters = currentKho !== '' || currentTrangThai !== '' || currentMaGian !== '';
 
   return (
-    <div className="p-2.5 sm:p-3 border-b border-slate-200 bg-white space-y-2 lg:space-y-3 rounded-2xl shadow-xs relative">
-      {/* Filters & Search Row */}
-      <div className="flex flex-wrap lg:flex-nowrap lg:items-center gap-2 lg:gap-3">
-        {/* Stats & View Mode Toggle & Refresh */}
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="text-[11px] font-bold text-slate-600 uppercase tracking-tight bg-slate-100 px-2.5 py-1.5 rounded-lg border border-slate-200">
-            Số đơn: {Number(count).toLocaleString('vi-VN')}
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            {/* View Mode Toggle (Single Button) */}
-            <button
-              type="button"
-              onClick={() => setViewMode(viewMode === 'table' ? 'card' : 'table')}
-              className="p-1.5 lg:p-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors border border-slate-200/60 cursor-pointer"
-              title={viewMode === 'table' ? 'Chuyển sang dạng Thẻ' : 'Chuyển sang dạng Bảng'}
-            >
-              {viewMode === 'table' ? <LayoutGrid className="w-4 h-4" /> : <TableIcon className="w-4 h-4" />}
-            </button>
-
-            {/* Refresh button */}
-            <button
-              type="button"
-              onClick={handleRefresh}
-              disabled={loading}
-              className="p-1.5 lg:p-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors border border-slate-200/60 cursor-pointer"
-              title="Tải lại dữ liệu"
-            >
-              <RotateCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
+  return (
+    <div className="p-2.5 sm:p-3 border-b border-slate-200 bg-white rounded-2xl shadow-xs relative">
+      {/* Main Toolbar */}
+      <div className="flex flex-wrap items-center gap-2 lg:gap-3">
+        {/* 1. Số đơn */}
+        <div className="text-[11px] font-bold text-slate-600 uppercase tracking-tight bg-slate-100 px-2.5 py-1.5 rounded-lg border border-slate-200 shrink-0">
+          Số đơn: {Number(count).toLocaleString('vi-VN')}
         </div>
 
-        {/* Single Stepper Date */}
-        <div className="flex items-center shrink-0">
-           <button 
-             type="button"
-             onClick={() => handleStepDate(-1)} 
-             className="w-7 h-8 flex items-center justify-center bg-slate-100 border border-slate-200 border-r-0 rounded-l-lg text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-colors cursor-pointer"
-             title="Lùi thời gian"
-           >
-             <ChevronLeft className="w-4 h-4"/>
-           </button>
-           <div 
-             className="h-8 px-3 flex items-center justify-center bg-slate-50 border border-slate-200 text-[11px] font-bold text-indigo-700 min-w-[110px] text-center cursor-pointer hover:bg-indigo-50 transition-colors"
-             onClick={() => setIsFilterOpen(true)}
-             title="Nhấn để chọn ngày cụ thể"
-           >
-             {dateDisplay}
-           </div>
-           <button 
-             type="button"
-             onClick={() => handleStepDate(1)} 
-             className="w-7 h-8 flex items-center justify-center bg-slate-100 border border-slate-200 border-l-0 rounded-r-lg text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-colors cursor-pointer"
-             title="Tiến thời gian"
-           >
-             <ChevronRight className="w-4 h-4"/>
-           </button>
-        </div>
+        {/* 2. Load */}
+        <button
+          type="button"
+          onClick={handleRefresh}
+          disabled={loading}
+          className="p-1.5 lg:p-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors border border-slate-200/60 cursor-pointer shrink-0"
+          title="Tải lại dữ liệu"
+        >
+          <RotateCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+        </button>
 
-        {/* Multi-keyword Search Box */}
-        <div className="relative flex-1 min-w-[200px]">
+        {/* 3. Tìm kiếm */}
+        <div className="relative flex-1 min-w-[200px] lg:min-w-[250px]">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
@@ -297,7 +257,34 @@ export default function HangHoanFilter(props) {
           </div>
         </div>
 
-        {/* Lọc nâng cao Button */}
+        {/* 4. Ngày (Single Stepper) */}
+        <div className="flex items-center shrink-0">
+           <button 
+             type="button"
+             onClick={() => handleStepDate(-1)} 
+             className="w-7 h-8 flex items-center justify-center bg-slate-100 border border-slate-200 border-r-0 rounded-l-lg text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-colors cursor-pointer"
+             title="Lùi thời gian"
+           >
+             <ChevronLeft className="w-4 h-4"/>
+           </button>
+           <div 
+             className="h-8 px-3 flex items-center justify-center bg-slate-50 border border-slate-200 text-[11px] font-bold text-indigo-700 min-w-[110px] text-center cursor-pointer hover:bg-indigo-50 transition-colors"
+             onClick={() => setIsFilterOpen(true)}
+             title="Nhấn để chọn ngày cụ thể"
+           >
+             {dateDisplay}
+           </div>
+           <button 
+             type="button"
+             onClick={() => handleStepDate(1)} 
+             className="w-7 h-8 flex items-center justify-center bg-slate-100 border border-slate-200 border-l-0 rounded-r-lg text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-colors cursor-pointer"
+             title="Tiến thời gian"
+           >
+             <ChevronRight className="w-4 h-4"/>
+           </button>
+        </div>
+
+        {/* 5. Lọc nâng cao Button */}
         <button 
           type="button"
           onClick={() => setIsFilterOpen(!isFilterOpen)} 
@@ -312,71 +299,78 @@ export default function HangHoanFilter(props) {
            <span className="hidden sm:inline">Lọc</span>
            {hasAdvancedFilters && <span className="w-2 h-2 rounded-full bg-rose-500 ml-0.5"></span>}
         </button>
+
+        {/* 6. Kiểu xem Bảng/Thẻ */}
+        <button
+          type="button"
+          onClick={() => setViewMode(viewMode === 'table' ? 'card' : 'table')}
+          className="p-1.5 lg:p-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors border border-slate-200/60 cursor-pointer shrink-0"
+          title={viewMode === 'table' ? 'Chuyển sang dạng Thẻ' : 'Chuyển sang dạng Bảng'}
+        >
+          {viewMode === 'table' ? <LayoutGrid className="w-4 h-4" /> : <TableIcon className="w-4 h-4" />}
+        </button>
+
+        {/* 7. Quét MVD */}
+        <button
+          type="button"
+          onClick={handleContinuousScan}
+          className="px-4 py-1.5 flex items-center justify-center gap-1.5 bg-violet-600 text-white font-bold rounded-lg text-xs hover:bg-violet-700 active:scale-[0.98] transition-all shadow-xs cursor-pointer shrink-0"
+        >
+          <QrCode className="w-4 h-4" />
+          <span className="hidden sm:inline">Quét MVD</span>
+        </button>
+
+        {/* 8. Thêm mới */}
+        <button
+          type="button"
+          onClick={handleOpenCreate}
+          className="px-4 py-1.5 flex items-center justify-center gap-1.5 bg-indigo-600 text-white font-bold rounded-lg text-xs hover:bg-indigo-700 active:scale-[0.98] transition-all shadow-xs cursor-pointer shrink-0"
+        >
+          <Plus className="w-4 h-4" />
+          <span className="hidden sm:inline">Thêm mới</span>
+        </button>
       </div>
 
-      {/* Action Buttons Row */}
-      <div className="flex flex-wrap items-center gap-2 lg:gap-3 pt-0.5">
-        {/* Mobile action buttons (Full width on mobile) */}
-        <div className="flex gap-2 w-full lg:w-auto">
+      {/* Export and Delete buttons (Only show if items are selected) */}
+      {selectedCount > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-slate-100">
           <button
             type="button"
-            onClick={handleOpenCreate}
-            className="flex-1 lg:flex-none lg:px-5 flex items-center justify-center gap-1.5 bg-indigo-600 text-white font-bold py-2 rounded-xl text-xs hover:bg-indigo-700 active:scale-[0.98] transition-all shadow-xs cursor-pointer"
+            onClick={onDeleteSelected}
+            className="flex items-center justify-center gap-1.5 bg-rose-600 text-white font-bold px-3.5 py-1.5 rounded-lg text-xs hover:bg-rose-700 transition-all shadow-xs cursor-pointer"
           >
-            <Plus className="w-4 h-4" />
-            <span>Thêm mới</span>
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Xóa ({selectedCount})</span>
           </button>
+
           <button
             type="button"
-            onClick={handleContinuousScan}
-            className="flex-1 lg:flex-none lg:px-5 flex items-center justify-center gap-1.5 bg-violet-600 text-white font-bold py-2 rounded-xl text-xs hover:bg-violet-700 active:scale-[0.98] transition-all shadow-xs cursor-pointer"
+            onClick={handleExportFull}
+            className="flex items-center justify-center gap-1.5 bg-emerald-600 text-white font-bold px-3.5 py-1.5 rounded-lg text-xs hover:bg-emerald-700 transition-all shadow-xs cursor-pointer"
           >
-            <QrCode className="w-4 h-4" />
-            <span>Quét MVD</span>
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            <span>Excel Full</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleExportSku}
+            className="flex items-center justify-center gap-1.5 bg-teal-600 text-white font-bold px-3.5 py-1.5 rounded-lg text-xs hover:bg-teal-700 transition-all shadow-xs cursor-pointer"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            <span>Excel SKU Tổng</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleExportMisaAction}
+            className="flex items-center justify-center gap-1.5 bg-amber-500 text-white font-bold px-4 py-1.5 rounded-lg text-xs hover:bg-amber-600 transition-all shadow-xs cursor-pointer"
+          >
+            <FileCode2 className="w-3.5 h-3.5" />
+            <span>MISA</span>
           </button>
         </div>
-
-        {/* Export and Delete buttons (Only show if items are selected) */}
-        {selectedCount > 0 && (
-          <div className="flex flex-wrap gap-2 w-full lg:w-auto">
-            <button
-              type="button"
-              onClick={onDeleteSelected}
-              className="flex items-center justify-center gap-1.5 bg-rose-600 text-white font-bold px-3.5 py-2 rounded-xl text-xs hover:bg-rose-700 transition-all shadow-xs cursor-pointer"
-            >
-              <Trash2 className="w-4 h-4" />
-              <span>Xóa ({selectedCount})</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleExportFull}
-              className="flex items-center justify-center gap-1.5 bg-emerald-600 text-white font-bold px-3.5 py-2 rounded-xl text-xs hover:bg-emerald-700 transition-all shadow-xs cursor-pointer"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              <span>Excel Full</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleExportSku}
-              className="flex items-center justify-center gap-1.5 bg-teal-600 text-white font-bold px-3.5 py-2 rounded-xl text-xs hover:bg-teal-700 transition-all shadow-xs cursor-pointer"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              <span>Excel SKU Tổng</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleExportMisaAction}
-              className="flex items-center justify-center gap-1.5 bg-amber-500 text-white font-bold px-4 py-2 rounded-xl text-xs hover:bg-amber-600 transition-all shadow-xs cursor-pointer"
-            >
-              <FileCode2 className="w-4 h-4" />
-              <span>MISA</span>
-            </button>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* OVERLAY FILTER DRAWER */}
       {isFilterOpen && (
