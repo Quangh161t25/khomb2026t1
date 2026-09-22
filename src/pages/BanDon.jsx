@@ -96,18 +96,20 @@ export default function BanDonPage() {
       }
 
       // 2. Fetch UD_CT in background
-      fetchSheetData(`${CONFIG.udctSheetName}!A:H`).then((udctRows) => {
+      fetchSheetData(`${CONFIG.udctSheetName}!A:AF`).then((udctRows) => {
         if (udctRows && udctRows.length > 1) {
           const parsed = udctRows.slice(1).map((row) => ({
-            ngay: row[0] || '',
-            mdh: row[1] || '',
-            mvd: row[2] || '',
-            ma_gian: row[3] || '',
-            id_sp: row[4] || '',
-            sku_shop_up: row[5] || '',
-            slg_xuat: row[6] || '',
-            ten_sp: row[7] || '',
-            khung_h: row[8] || '',
+            ngay: (row[4] || '').toString().trim(),
+            khung_h: (row[9] || '').toString().trim(),
+            ma_gian: (row[10] || '').toString().trim(),
+            mvd: (row[11] || '').toString().trim(),
+            mdh: (row[12] || '').toString().trim(),
+            sku_shop_up: (row[13] || '').toString().trim(),
+            so_luong: (row[14] || '').toString().trim(),
+            id_sp: (row[15] || '').toString().trim(),
+            id_sp_ct: (row[16] || '').toString().trim(),
+            ten_sp: (row[17] || '').toString().trim(),
+            slg_xuat: (row[18] || '').toString().trim(),
           }));
           setUdctData(parsed);
         }

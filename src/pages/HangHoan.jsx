@@ -138,17 +138,22 @@ export default function HangHoanPage() {
   const ensureUdctData = useCallback(async () => {
     if (udctData.length > 0) return udctData;
     try {
-      const udctRows = await fetchSheetData(CONFIG.udctSheetName, 'A1:H20000');
+      const udctRows = await fetchSheetData(CONFIG.udctSheetName, 'A1:AF20000');
       if (udctRows && udctRows.length > 1) {
-        const parsedUdct = udctRows.slice(1).map((row) => ({
-          ngay: (row[0] || '').toString().trim(),
-          mdh: (row[1] || '').toString().trim(),
-          mvd: (row[2] || '').toString().trim(),
-          ma_gian: (row[3] || '').toString().trim(),
-          id_sp: (row[4] || '').toString().trim(),
-          id_sp_ct: (row[5] || '').toString().trim(),
-          slg_xuat: (row[6] || '').toString().trim(),
-          ten_sp: (row[7] || '').toString().trim(),
+        const parsedUdct = udctRows.slice(1).map((row, idx) => ({
+          rowIndex: idx + 2,
+          ngay: (row[4] || '').toString().trim(),
+          san: (row[8] || '').toString().trim(),
+          khung_h: (row[9] || '').toString().trim(),
+          ma_gian: (row[10] || '').toString().trim(),
+          mvd: (row[11] || '').toString().trim(),
+          mdh: (row[12] || '').toString().trim(),
+          sku_shop_up: (row[13] || '').toString().trim(),
+          so_luong: (row[14] || '').toString().trim(),
+          id_sp: (row[15] || '').toString().trim(),
+          id_sp_ct: (row[16] || '').toString().trim(),
+          ten_sp: (row[17] || '').toString().trim(),
+          slg_xuat: (row[18] || '').toString().trim(),
         }));
         setUdctData(parsedUdct);
         return parsedUdct;
