@@ -691,14 +691,6 @@ export default function HangHoanDrawer({
                     </button>
                   )}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => onOpenQrScan((code) => { handleMdhInput(code); setMdhSuggestions([]); })}
-                  className="px-3 py-2 border border-slate-200 rounded-lg text-xs bg-slate-50 hover:bg-slate-100 font-bold flex items-center gap-1 shrink-0"
-                >
-                  <Camera className="w-4 h-4 text-indigo-600" />
-                  <span>QR</span>
-                </button>
               </div>
               
               {mdhSuggestions.length > 0 && (
