@@ -162,49 +162,115 @@ export default function HangHoanDrawer({
     }
   }, [udctData, isOpen, mvd, mode]);
 
-  const getSmartSuggestions = (field, text, currentMaGian) => {
+  const getSmartSuggestions = (text, currentMaGian) => {
     const q = text.trim().toLowerCase();
     if (!q) return [];
     
     const mg = (currentMaGian || '').trim().toLowerCase();
     
-    // Nếu gõ chính mã gian vào ô tìm kiếm, trả về tất cả mã của gian đó
+    // Nếu gõ chính mã gian vào ô tìm kiếm, trả về các đơn của gian đó (giới hạn 15)
     if (mg && q === mg) {
-      return hangHoanData
-        .filter(item => (item.ma_gian || '').trim().toLowerCase() === mg && item[field])
-        .map(item => item[field])
-        .filter((v, i, a) => a.indexOf(v) === i)
-        .slice(0, 10);
+      return udctData
+        .filter(item => (item.ma_gian || '').trim().toLowerCase() === mg)
+        .slice(0, 15);
     }
     
-    // Tìm các dòng chứa q
-    const allMatches = hangHoanData
-      .filter(item => item[field] && item[field].toLowerCase().includes(q));
+    // Tìm các dòng chứa q trong MVD hoặc MDH
+    const allMatches = udctData.filter(item => {
+       const mvdStr = (item.mvd || '').toLowerCase();
+       const mdhStr = (item.mdh || '').toLowerCase();
+       return mvdStr.includes(q) || mdhStr.includes(q);
+    });
       
     // Ưu tiên dòng có ma_gian khớp với currentMaGian
     if (mg) {
       const strictMatches = allMatches.filter(item => (item.ma_gian || '').trim().toLowerCase() === mg);
       if (strictMatches.length > 0) {
-        return strictMatches
-          .map(item => item[field])
-          .filter((v, i, a) => a.indexOf(v) === i)
-          .slice(0, 10);
+        return strictMatches.slice(0, 15);
       }
     }
     
     // Nếu không khớp gian nào hoặc chưa nhập gian, trả về tất cả
-    return allMatches
-      .map(item => item[field])
-      .filter((v, i, a) => a.indexOf(v) === i)
-      .slice(0, 10);
+    return allMatches.slice(0, 15);
   };
 
-  const selectMvd = (val) => {
-    setMvd(val);
+  const handleSelectRichSuggestion = (item, targetField) => {
+    if (targetField === 'mvd') {
+      setMvd(item.mvd || item.mdh || '');
+      checkDuplicateNotice((item.mvd || item.mdh || '').trim());
+    } else if (targetField === 'mvd2') {
+      setMvd2(item.mvd || item.mdh || '');
+    } else if (targetField === 'mdh') {
+      setMdh(item.mdh || item.mvd || '');
+    }
+    
+    if (mode === 'create') {
+      if (item.ma_gian) setMaGian(item.ma_gian);
+      if (targetField !== 'mdh' && item.mdh) setMdh(item.mdh);
+      if (item.ngay) setNgayNhan(toYMD(item.ngay) || getTodayYmd());
+      
+      const skuCtVal = item.id_sp_ct || '';
+      let finalSku = skuCtVal ? skuCtVal.substring(0, 4) : (item.sku_shop_up || item.id_sp || '');
+      let finalTenSp = item.ten_sp || '';
+      
+      if (skuCtVal && (!finalSku || !finalTenSp)) {
+        const sp = sanphamData.find((s) => (s.sku_ct || s.id_sp_ct || s.sku_con || '').toLowerCase() === skuCtVal.toLowerCase());
+        if (sp) {
+          if (!finalSku) finalSku = sp.sku || sp.id_sp || '';
+          if (!finalTenSp) finalTenSp = sp.ten_sp || sp.ten || '';
+        }
+      }
+      
+      if (skuCtVal) setSkuCt(skuCtVal);
+      if (finalSku) setSku(finalSku);
+      if (finalTenSp) setTenSp(finalTenSp);
+      if (item.slg_xuat || item.so_luong) setSlg(parseFloat(item.slg_xuat || item.so_luong) || 1);
+    }
+    
     setMvdSuggestions([]);
+    setMvd2Suggestions([]);
+    setMdhSuggestions([]);
   };
 
-  // MVD change & duplicate / auto-fill check
+  const renderSuggestionItem = (item, type, index) => {
+    const isMdhInput = type === 'mdh';
+    const mainCode = isMdhInput ? (item.mdh || item.mvd || '-') : (item.mvd || item.mdh || '-');
+    const subCode = isMdhInput 
+      ? (item.mvd ? `MVD: ${item.mvd}` : '') 
+      : (item.mdh ? `MDH: ${item.mdh}` : '');
+    const slg = item.slg_xuat || item.so_luong || '1';
+    const skuDisplay = item.id_sp_ct || item.id_sp || '';
+
+    return (
+      <div
+        key={index}
+        onClick={() => handleSelectRichSuggestion(item, type)}
+        className="px-3 py-2 border-b border-slate-100 last:border-0 hover:bg-blue-50/70 active:bg-blue-100/70 cursor-pointer transition-colors"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="font-bold text-slate-900 text-xs truncate">{mainCode}</span>
+            {subCode && (
+              <span className="text-[10px] text-blue-600 bg-blue-50 border border-blue-200/60 px-1.5 py-0.5 rounded font-medium shrink-0">
+                {subCode}
+              </span>
+            )}
+          </div>
+          <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-1.5 py-0.5 rounded shrink-0">
+            SL: {slg}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-1 truncate">
+          {item.ma_gian && <span className="font-semibold text-slate-700 shrink-0">{item.ma_gian}</span>}
+          {item.ma_gian && skuDisplay && <span className="text-slate-300">•</span>}
+          {skuDisplay && <span className="text-indigo-600 font-medium shrink-0">{skuDisplay}</span>}
+          {item.ten_sp && <span className="text-slate-300">•</span>}
+          {item.ten_sp && <span className="truncate text-slate-600" title={item.ten_sp}>{item.ten_sp}</span>}
+        </div>
+      </div>
+    );
+  };
+
   const handleMvdChange = (val) => {
     setMvd(val);
     const cleanVal = val.trim();
@@ -213,207 +279,18 @@ export default function HangHoanDrawer({
       setMvdSuggestions([]);
       return;
     }
-    setMvdSuggestions(getSmartSuggestions('mvd', val, maGian));
-
-    // Auto-fill from UD_CT if matching MVD or MDH
-    const match = udctData.find(
-      (u) => (u.mvd || '').trim().toLowerCase() === cleanVal.toLowerCase() ||
-             (u.mdh || '').trim().toLowerCase() === cleanVal.toLowerCase()
-    );
-    if (match && mode === 'create') {
-      if (match.ma_gian) setMaGian(match.ma_gian);
-      if (match.mdh) setMdh(match.mdh);
-      if (match.ngay) setNgayNhan(toYMD(match.ngay) || getTodayYmd());
-      
-      const skuCtVal = match.id_sp_ct || '';
-        let finalSku = skuCtVal ? skuCtVal.substring(0, 4) : (match.sku_shop_up || match.id_sp || '');
-        let finalTenSp = match.ten_sp || '';
-      
-      if (skuCtVal && (!finalSku || !finalTenSp)) {
-        const sp = sanphamData.find((s) => (s.sku_ct || s.id_sp_ct || s.sku_con || '').toLowerCase() === skuCtVal.toLowerCase());
-        if (sp) {
-          if (!finalSku) finalSku = sp.sku || sp.id_sp || '';
-          if (!finalTenSp) finalTenSp = sp.ten_sp || sp.ten || '';
-        }
-      }
-      
-      if (finalSku) setSku(finalSku);
-      if (skuCtVal) setSkuCt(skuCtVal);
-      if (finalTenSp) setTenSp(finalTenSp);
-      if (match.so_luong) setSlg(parseFloat(match.so_luong) || 1);
-      setHoanTra('Hoàn');
-
-      // Nếu nhập mã là MDH, thì cập nhật lại ô MVD cho đúng
-      if (match.mdh && match.mdh.trim().toLowerCase() === cleanVal.toLowerCase()) {
-        if (match.mvd && match.mvd.trim().toLowerCase() !== cleanVal.toLowerCase()) {
-          setMvd(match.mvd.trim());
-        }
-      }
-    } else if (!match && mode === 'create') {
-      setHoanTra('Trả');
-    }
-
+    setMvdSuggestions(getSmartSuggestions(val, maGian));
     checkDuplicateNotice(cleanVal);
-  };
-
-  // MDH change & auto-fill check
-  const handleMdhChange = (val) => {
-    setMdh(val);
-    const cleanVal = val.trim();
-    if (!cleanVal) {
-      setDuplicateMvdNotice('');
-      return;
-    }
-
-    const match = udctData.find(
-      (u) => (u.mdh || '').trim().toLowerCase() === cleanVal.toLowerCase() ||
-             (u.mvd || '').trim().toLowerCase() === cleanVal.toLowerCase()
-    );
-
-    if (match && mode === 'create') {
-      if (match.ma_gian) setMaGian(match.ma_gian);
-      if (match.mvd && !mvd) setMvd(match.mvd);
-      if (match.ngay) setNgayNhan(toYMD(match.ngay) || getTodayYmd());
-      
-      const skuCtVal = match.id_sp_ct || '';
-        let finalSku = skuCtVal ? skuCtVal.substring(0, 4) : (match.sku_shop_up || match.id_sp || '');
-        let finalTenSp = match.ten_sp || '';
-      
-      if (skuCtVal && (!finalSku || !finalTenSp)) {
-        const sp = sanphamData.find((s) => (s.sku_ct || s.id_sp_ct || s.sku_con || '').toLowerCase() === skuCtVal.toLowerCase());
-        if (sp) {
-          if (!finalSku) finalSku = sp.sku || sp.id_sp || '';
-          if (!finalTenSp) finalTenSp = sp.ten_sp || sp.ten || '';
-        }
-      }
-      
-      if (finalSku) setSku(finalSku);
-      if (skuCtVal) setSkuCt(skuCtVal);
-      if (finalTenSp) setTenSp(finalTenSp);
-      if (match.so_luong) setSlg(parseFloat(match.so_luong) || 1);
-      setHoanTra('Hoàn');
-      
-      if (match.mvd && match.mvd.trim().toLowerCase() === cleanVal.toLowerCase()) {
-        if (match.mdh && match.mdh.trim().toLowerCase() !== cleanVal.toLowerCase()) {
-          setMdh(match.mdh.trim());
-        }
-      }
-    } else if (!match && mode === 'create') {
-      setHoanTra('Trả');
-    }
-
-    checkDuplicateNotice(cleanVal);
-  };
-
-  const checkDuplicateNotice = (val) => {
-    const duplicate = hangHoanData.find(item => {
-      const isDuplicateMvd = (item.mvd || '').toString().trim() === val || (item.mvd_2 || '').toString().trim() === val;
-      if (!isDuplicateMvd) return false;
-      if (mode === 'edit' && initialData && item.rowIndex === initialData.rowIndex) {
-        return false;
-      }
-      return true;
-    });
-
-    if (duplicate) {
-      setDuplicateMvdNotice(`MVD đã có trong Hàng hoàn ngày ${duplicate.ngay_nhan || '?'}`);
-    } else {
-      setDuplicateMvdNotice('');
-    }
-  };
-
-  // SKU CT auto-suggestions
-  const handleSkuCtInput = (val) => {
-    setSkuCt(val);
-    if (val) {
-      setSku(val.substring(0, 4));
-    } else {
-      setSku('');
-    }
-
-    const q = val.trim().toLowerCase();
-    if (!q) {
-      setSkuCtSuggestions([]);
-      return;
-    }
-
-    const udctMatches = [];
-    const seen = new Set();
-    
-    for (const item of udctData) {
-      const ct = (item.sku_ct || item.id_sp_ct || '').toLowerCase();
-      const main = (item.sku_shop_up || item.id_sp || '').toLowerCase();
-      const name = (item.ten_sp || '').toLowerCase();
-      
-      if (ct.includes(q) || main.includes(q) || name.includes(q)) {
-        const key = ct || main;
-        if (key && !seen.has(key)) {
-          seen.add(key);
-          udctMatches.push({
-            sku_ct: item.id_sp_ct,
-            sku: item.id_sp || item.sku_shop_up,
-            ten_sp: item.ten_sp
-          });
-          if (udctMatches.length >= 8) break;
-        }
-      }
-    }
-
-    const spMatches = [];
-    if (udctMatches.length < 8) {
-      for (const s of sanphamData) {
-        const ct = (s.sku_ct || s.id_sp_ct || s.sku_con || '').toLowerCase();
-        const main = (s.sku || s.id_sp || '').toLowerCase();
-        const name = (s.ten_sp || '').toLowerCase();
-        
-        if (ct.includes(q) || main.includes(q) || name.includes(q)) {
-          const key = ct || main;
-          if (key && !seen.has(key)) {
-            seen.add(key);
-            spMatches.push({
-              sku_ct: s.sku_con || '',
-              sku: s.id_sp,
-              ten_sp: s.ten_sp || s.ten
-            });
-            if (udctMatches.length + spMatches.length >= 8) break;
-          }
-        }
-      }
-    }
-
-    setSkuCtSuggestions([...udctMatches, ...spMatches]);
-  };
-
-  const selectSkuCt = (item) => {
-    const chosenSkuCt = item.sku_ct || item.id_sp_ct || '';
-    setSkuCt(chosenSkuCt);
-    if (chosenSkuCt) {
-      setSku(chosenSkuCt.substring(0, 4));
-    } else if (item.sku || item.id_sp) {
-      setSku(item.sku || item.id_sp);
-    }
-    if (item.ten_sp) setTenSp(item.ten_sp);
-    setSkuCtSuggestions([]);
   };
 
   const handleMvd2Input = (val) => {
     setMvd2(val);
-    setMvd2Suggestions(getSmartSuggestions('mvd_2', val, maGian));
-  };
-
-  const selectMvd2 = (val) => {
-    setMvd2(val);
-    setMvd2Suggestions([]);
+    setMvd2Suggestions(getSmartSuggestions(val, maGian));
   };
 
   const handleMdhInput = (val) => {
     setMdh(val);
-    setMdhSuggestions(getSmartSuggestions('id_dh', val, maGian));
-  };
-
-  const selectMdh = (val) => {
-    setMdh(val);
-    setMdhSuggestions([]);
+    setMdhSuggestions(getSmartSuggestions(val, maGian));
   };
 
   // Image Upload handler (Convert to base64 or upload to ImgBB)
@@ -611,15 +488,7 @@ export default function HangHoanDrawer({
                 
                 {mvd2Suggestions.length > 0 && (
                   <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto">
-                    {mvd2Suggestions.map((item, i) => (
-                      <div
-                        key={i}
-                        onClick={() => selectMvd2(item)}
-                        className="p-2 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-0 text-xs font-semibold text-slate-700"
-                      >
-                        {item}
-                      </div>
-                    ))}
+                    {mvd2Suggestions.map((item, i) => renderSuggestionItem(item, 'mvd2', i))}
                   </div>
                 )}
               </div>
