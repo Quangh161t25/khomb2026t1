@@ -244,7 +244,7 @@ export default function HangHoanPage() {
       }
 
       return true;
-    }).sort((a, b) => toYMD(b.ngay_nhan).localeCompare(toYMD(a.ngay_nhan)));
+    }).sort((a, b) => b.rowIndex - a.rowIndex);
   }, [data, filters]);
 
   // Row Selection State
