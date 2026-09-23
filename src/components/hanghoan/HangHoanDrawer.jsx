@@ -668,15 +668,44 @@ export default function HangHoanDrawer({
               </div>
             </div>
 
-            {/* MDH */}
-            <div className="col-span-2">
-              <input
-                type="text"
-                value={mdh}
-                onChange={(e) => handleMdhChange(e.target.value)}
-                placeholder="MDH (Mã đơn hàng)..."
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500/20"
-              />
+                        {/* MDH */}
+            <div className="col-span-2 relative">
+              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Mã đơn hàng (MDH)</label>
+              <div className="flex gap-1.5">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={mdh}
+                    onChange={(e) => handleMdhInput(e.target.value)}
+                    onFocus={(e) => handleMdhInput(e.target.value)}
+                    placeholder="Mã đơn hàng / Order ID..."
+                    className="w-full pl-3 pr-8 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20 uppercase"
+                  />
+                  {mdh && (
+                    <button
+                      type="button"
+                      onClick={() => { handleMdhInput(''); setMdhSuggestions([]); }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onOpenQrScan((code) => { handleMdhInput(code); setMdhSuggestions([]); })}
+                  className="px-3 py-2 border border-slate-200 rounded-lg text-xs bg-slate-50 hover:bg-slate-100 font-bold flex items-center gap-1 shrink-0"
+                >
+                  <Camera className="w-4 h-4 text-indigo-600" />
+                  <span>QR</span>
+                </button>
+              </div>
+              
+              {mdhSuggestions.length > 0 && (
+                <div className="absolute left-0 right-0 bottom-full mb-1 bg-white border border-slate-200 rounded-xl shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.15)] z-[100] max-h-56 overflow-y-auto">
+                  {mdhSuggestions.map((item, i) => renderSuggestionItem(item, 'mdh', i))}
+                </div>
+              )}
             </div>
 
             {/* 3 Real Photos Upload */}
