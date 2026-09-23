@@ -53,6 +53,7 @@ export default function HangHoanDrawer({
 
   // Suggestions state
   const [skuCtSuggestions, setSkuCtSuggestions] = useState([]);
+  const [mvdSuggestions, setMvdSuggestions] = useState([]);
   const [mvd2Suggestions, setMvd2Suggestions] = useState([]);
   const [mdhSuggestions, setMdhSuggestions] = useState([]);
 
@@ -100,6 +101,7 @@ export default function HangHoanDrawer({
 
       setDuplicateMvdNotice('');
       setSkuCtSuggestions([]);
+      setMvdSuggestions([]);
       setMvd2Suggestions([]);
       setMdhSuggestions([]);
     }
@@ -160,14 +162,58 @@ export default function HangHoanDrawer({
     }
   }, [udctData, isOpen, mvd, mode]);
 
+  const getSmartSuggestions = (field, text, currentMaGian) => {
+    const q = text.trim().toLowerCase();
+    if (!q) return [];
+    
+    const mg = (currentMaGian || '').trim().toLowerCase();
+    
+    // Nếu gõ chính mã gian vào ô tìm kiếm, trả về tất cả mã của gian đó
+    if (mg && q === mg) {
+      return hangHoanData
+        .filter(item => (item.ma_gian || '').trim().toLowerCase() === mg && item[field])
+        .map(item => item[field])
+        .filter((v, i, a) => a.indexOf(v) === i)
+        .slice(0, 10);
+    }
+    
+    // Tìm các dòng chứa q
+    const allMatches = hangHoanData
+      .filter(item => item[field] && item[field].toLowerCase().includes(q));
+      
+    // Ưu tiên dòng có ma_gian khớp với currentMaGian
+    if (mg) {
+      const strictMatches = allMatches.filter(item => (item.ma_gian || '').trim().toLowerCase() === mg);
+      if (strictMatches.length > 0) {
+        return strictMatches
+          .map(item => item[field])
+          .filter((v, i, a) => a.indexOf(v) === i)
+          .slice(0, 10);
+      }
+    }
+    
+    // Nếu không khớp gian nào hoặc chưa nhập gian, trả về tất cả
+    return allMatches
+      .map(item => item[field])
+      .filter((v, i, a) => a.indexOf(v) === i)
+      .slice(0, 10);
+  };
+
+  const selectMvd = (val) => {
+    setMvd(val);
+    setMvdSuggestions([]);
+  };
+
   // MVD change & duplicate / auto-fill check
   const handleMvdChange = (val) => {
     setMvd(val);
     const cleanVal = val.trim();
     if (!cleanVal) {
       setDuplicateMvdNotice('');
+      setMvdSuggestions([]);
       return;
     }
+    setMvdSuggestions(getSmartSuggestions('mvd', val, maGian));
 
     // Auto-fill from UD_CT if matching MVD or MDH
     const match = udctData.find(
@@ -352,18 +398,7 @@ export default function HangHoanDrawer({
 
   const handleMvd2Input = (val) => {
     setMvd2(val);
-    const text = val.trim().toLowerCase();
-    if (!text) {
-      setMvd2Suggestions([]);
-      return;
-    }
-    // Gợi ý từ lịch sử (hangHoanData)
-    const matches = hangHoanData
-      .filter(item => item.mvd_2 && item.mvd_2.toLowerCase().includes(text))
-      .map(item => item.mvd_2)
-      .filter((v, i, a) => a.indexOf(v) === i)
-      .slice(0, 8);
-    setMvd2Suggestions(matches);
+    setMvd2Suggestions(getSmartSuggestions('mvd_2', val, maGian));
   };
 
   const selectMvd2 = (val) => {
@@ -373,18 +408,7 @@ export default function HangHoanDrawer({
 
   const handleMdhInput = (val) => {
     setMdh(val);
-    const text = val.trim().toLowerCase();
-    if (!text) {
-      setMdhSuggestions([]);
-      return;
-    }
-    // Gợi ý từ lịch sử
-    const matches = hangHoanData
-      .filter(item => item.id_dh && item.id_dh.toLowerCase().includes(text))
-      .map(item => item.id_dh)
-      .filter((v, i, a) => a.indexOf(v) === i)
-      .slice(0, 8);
-    setMdhSuggestions(matches);
+    setMdhSuggestions(getSmartSuggestions('id_dh', val, maGian));
   };
 
   const selectMdh = (val) => {
