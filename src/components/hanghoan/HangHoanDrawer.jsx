@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import {
@@ -22,7 +22,7 @@ export default function HangHoanDrawer({
   onSave,
   onDelete,
   onCopy,
-  skuCatalog = [],
+  sanphamData = [],
   udctData = [],
   hangHoanData = [],
   onOpenQrScan,
@@ -145,7 +145,7 @@ export default function HangHoanDrawer({
         let finalTenSp = match.ten_sp || '';
         
         if (skuCtVal && (!finalSku || !finalTenSp)) {
-          const sp = skuCatalog.find((s) => (s.sku_ct || s.id_sp_ct || s.sku_con || '').toLowerCase() === skuCtVal.toLowerCase());
+          const sp = sanphamData.find((s) => (s.sku_ct || s.id_sp_ct || s.sku_con || '').toLowerCase() === skuCtVal.toLowerCase());
           if (sp) {
             if (!finalSku) finalSku = sp.sku || sp.id_sp || '';
             if (!finalTenSp) finalTenSp = sp.ten_sp || sp.ten || '';
@@ -184,7 +184,7 @@ export default function HangHoanDrawer({
         let finalTenSp = match.ten_sp || '';
       
       if (skuCtVal && (!finalSku || !finalTenSp)) {
-        const sp = skuCatalog.find((s) => (s.sku_ct || s.id_sp_ct || s.sku_con || '').toLowerCase() === skuCtVal.toLowerCase());
+        const sp = sanphamData.find((s) => (s.sku_ct || s.id_sp_ct || s.sku_con || '').toLowerCase() === skuCtVal.toLowerCase());
         if (sp) {
           if (!finalSku) finalSku = sp.sku || sp.id_sp || '';
           if (!finalTenSp) finalTenSp = sp.ten_sp || sp.ten || '';
@@ -234,7 +234,7 @@ export default function HangHoanDrawer({
         let finalTenSp = match.ten_sp || '';
       
       if (skuCtVal && (!finalSku || !finalTenSp)) {
-        const sp = skuCatalog.find((s) => (s.sku_ct || s.id_sp_ct || s.sku_con || '').toLowerCase() === skuCtVal.toLowerCase());
+        const sp = sanphamData.find((s) => (s.sku_ct || s.id_sp_ct || s.sku_con || '').toLowerCase() === skuCtVal.toLowerCase());
         if (sp) {
           if (!finalSku) finalSku = sp.sku || sp.id_sp || '';
           if (!finalTenSp) finalTenSp = sp.ten_sp || sp.ten || '';
@@ -315,7 +315,7 @@ export default function HangHoanDrawer({
 
     const spMatches = [];
     if (udctMatches.length < 8) {
-      for (const s of skuCatalog) {
+      for (const s of sanphamData) {
         const ct = (s.sku_ct || s.id_sp_ct || s.sku_con || '').toLowerCase();
         const main = (s.sku || s.id_sp || '').toLowerCase();
         const name = (s.ten_sp || '').toLowerCase();
