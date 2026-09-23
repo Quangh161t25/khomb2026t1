@@ -136,7 +136,7 @@ export default function HangHoanDrawer({
     const cleanVal = val.trim().toLowerCase();
     if (!cleanVal) return;
     
-    const match = udctData.find(u => {
+    const match = [...udctData].reverse().find(u => {
       const mvdVal = (u.mvd || '').trim().toLowerCase();
       const mdhVal = (u.mdh || '').trim().toLowerCase();
       if (fieldName === 'mvd' || fieldName === 'mvd2') {
@@ -186,6 +186,7 @@ export default function HangHoanDrawer({
     if (mg && q === mg) {
       return udctData
         .filter(item => (item.ma_gian || '').trim().toLowerCase() === mg)
+        .reverse()
         .slice(0, 15);
     }
     
@@ -200,12 +201,12 @@ export default function HangHoanDrawer({
     if (mg) {
       const strictMatches = allMatches.filter(item => (item.ma_gian || '').trim().toLowerCase() === mg);
       if (strictMatches.length > 0) {
-        return strictMatches.slice(0, 15);
+        return strictMatches.reverse().slice(0, 15);
       }
     }
     
     // Nếu không khớp gian nào hoặc chưa nhập gian, trả về tất cả
-    return allMatches.slice(0, 15);
+    return allMatches.reverse().slice(0, 15);
   };
 
   const handleSelectRichSuggestion = (item, targetField) => {
