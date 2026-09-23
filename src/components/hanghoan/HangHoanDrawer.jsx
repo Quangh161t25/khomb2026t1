@@ -129,38 +129,52 @@ export default function HangHoanDrawer({
     };
   }, [isOpen]);
 
-  // Handle slow network where UD_CT data loads AFTER the barcode is scanned
-  useEffect(() => {
-    if (isOpen && udctData.length > 0 && mvd && mode === 'create') {
-      const cleanVal = mvd.trim();
-      const match = udctData.find(
-        (u) => (u.mvd || '').trim().toLowerCase() === cleanVal.toLowerCase() ||
-               (u.mdh || '').trim().toLowerCase() === cleanVal.toLowerCase()
-      );
-      if (match) {
-        if (!maGian && match.ma_gian) setMaGian(match.ma_gian);
-        if (!mdh && match.mdh) setMdh(match.mdh);
-        if (match.ngay) setNgayNhan(toYMD(match.ngay) || getTodayYmd());
-        
-        const skuCtVal = match.id_sp_ct || '';
-        let finalSku = skuCtVal ? skuCtVal.substring(0, 4) : (match.sku_shop_up || match.id_sp || '');
-        let finalTenSp = match.ten_sp || '';
-        
-        if (skuCtVal && (!finalSku || !finalTenSp)) {
-          const sp = sanphamData.find((s) => (s.sku_ct || s.id_sp_ct || s.sku_con || '').toLowerCase() === skuCtVal.toLowerCase());
-          if (sp) {
-            if (!finalSku) finalSku = sp.sku || sp.id_sp || '';
-            if (!finalTenSp) finalTenSp = sp.ten_sp || sp.ten || '';
-          }
-        }
-        
-        if (!sku && finalSku) setSku(finalSku);
-        if (!skuCt && skuCtVal) setSkuCt(skuCtVal);
-        if (!tenSp && finalTenSp) setTenSp(finalTenSp);
-        setHoanTra('Hoàn');
+
+
+  const tryAutoFill = (val, fieldName) => {
+    if (mode !== 'create') return;
+    const cleanVal = val.trim().toLowerCase();
+    if (!cleanVal) return;
+    
+    const match = udctData.find(u => {
+      const mvdVal = (u.mvd || '').trim().toLowerCase();
+      const mdhVal = (u.mdh || '').trim().toLowerCase();
+      if (fieldName === 'mvd' || fieldName === 'mvd2') {
+         return (mvdVal === cleanVal && cleanVal !== '') || (mdhVal === cleanVal && cleanVal !== '');
       }
+      if (fieldName === 'mdh') {
+         return (mdhVal === cleanVal && cleanVal !== '') || (mvdVal === cleanVal && cleanVal !== '');
+      }
+      return false;
+    });
+    
+    if (match) {
+      if (match.ma_gian) setMaGian(match.ma_gian);
+      if (fieldName !== 'mdh' && match.mdh) setMdh(match.mdh);
+      
+      // Chú ý: Ta chỉ tự động điền MVD nếu đang nhập ở MDH, còn MVD2 thì không nên đè MVD
+      if (fieldName === 'mdh' && match.mvd && !mvd) setMvd(match.mvd);
+      
+      if (match.ngay) setNgayNhan(toYMD(match.ngay) || getTodayYmd());
+      
+      const skuCtVal = match.id_sp_ct || '';
+      let finalSku = skuCtVal ? skuCtVal.substring(0, 4) : (match.sku_shop_up || match.id_sp || '');
+      let finalTenSp = match.ten_sp || '';
+      
+      if (skuCtVal && (!finalSku || !finalTenSp)) {
+        const sp = sanphamData.find((s) => (s.sku_ct || s.id_sp_ct || s.sku_con || '').toLowerCase() === skuCtVal.toLowerCase());
+        if (sp) {
+          if (!finalSku) finalSku = sp.sku || sp.id_sp || '';
+          if (!finalTenSp) finalTenSp = sp.ten_sp || sp.ten || '';
+        }
+      }
+      
+      if (skuCtVal) setSkuCt(skuCtVal);
+      if (finalSku) setSku(finalSku);
+      if (finalTenSp) setTenSp(finalTenSp);
+      if (match.slg_xuat || match.so_luong) setSlg(parseFloat(match.slg_xuat || match.so_luong) || 1);
     }
-  }, [udctData, isOpen, mvd, mode]);
+  };
 
   const getSmartSuggestions = (text, currentMaGian) => {
     const q = text.trim().toLowerCase();
@@ -281,16 +295,19 @@ export default function HangHoanDrawer({
     }
     setMvdSuggestions(getSmartSuggestions(val, maGian));
     checkDuplicateNotice(cleanVal);
+    tryAutoFill(cleanVal, 'mvd');
   };
 
   const handleMvd2Input = (val) => {
     setMvd2(val);
     setMvd2Suggestions(getSmartSuggestions(val, maGian));
+    tryAutoFill(val, 'mvd2');
   };
 
   const handleMdhInput = (val) => {
     setMdh(val);
     setMdhSuggestions(getSmartSuggestions(val, maGian));
+    tryAutoFill(val, 'mdh');
   };
 
   // Image Upload handler (Convert to base64 or upload to ImgBB)
