@@ -57,6 +57,68 @@ export default function HangHoanDrawer({
   const [mvd2Suggestions, setMvd2Suggestions] = useState([]);
   const [mdhSuggestions, setMdhSuggestions] = useState([]);
 
+
+  // Tự động điền dữ liệu khi UD_CT được load hoặc khi MVD/MVD2/MDH thay đổi
+  useEffect(() => {
+    if (mode !== 'create' || !isOpen || udctData.length === 0) return;
+
+    const findMatch = (val) => {
+      if (!val) return null;
+      const cleanVal = val.trim().toLowerCase();
+      if (!cleanVal) return null;
+      // Duyệt ngược để lấy đơn mới nhất
+      for (let i = udctData.length - 1; i >= 0; i--) {
+        const u = udctData[i];
+        const mvdVal = (u.mvd || '').trim().toLowerCase();
+        const mdhVal = (u.mdh || '').trim().toLowerCase();
+        if ((mvdVal === cleanVal && cleanVal !== '') || (mdhVal === cleanVal && cleanVal !== '')) {
+          return u;
+        }
+      }
+      return null;
+    };
+
+    let match = null;
+    let field = '';
+    
+    // Ưu tiên MVD -> MVD2 -> MDH
+    if (mvd) {
+      match = findMatch(mvd);
+      field = 'mvd';
+    }
+    if (!match && mvd2) {
+      match = findMatch(mvd2);
+      field = 'mvd2';
+    }
+    if (!match && mdh) {
+      match = findMatch(mdh);
+      field = 'mdh';
+    }
+
+    if (match) {
+      if (match.ma_gian) setMaGian(match.ma_gian);
+      if (field !== 'mdh' && match.mdh) setMdh(match.mdh);
+      if (field === 'mdh' && match.mvd && !mvd) setMvd(match.mvd);
+      
+      const skuCtVal = match.id_sp_ct || '';
+      let finalSku = skuCtVal ? skuCtVal.substring(0, 4) : (match.sku_shop_up || match.id_sp || '');
+      let finalTenSp = match.ten_sp || '';
+      
+      if (skuCtVal && (!finalSku || !finalTenSp)) {
+        const sp = sanphamData.find((s) => (s.sku_ct || s.id_sp_ct || s.sku_con || '').toLowerCase() === skuCtVal.toLowerCase());
+        if (sp) {
+          if (!finalSku) finalSku = sp.sku || sp.id_sp || '';
+          if (!finalTenSp) finalTenSp = sp.ten_sp || sp.ten || '';
+        }
+      }
+      
+      if (!skuCt && skuCtVal) setSkuCt(skuCtVal);
+      if (!sku && finalSku) setSku(finalSku);
+      if (!tenSp && finalTenSp) setTenSp(finalTenSp);
+      if (slg === 1 && (match.slg_xuat || match.so_luong)) setSlg(parseFloat(match.slg_xuat || match.so_luong) || 1);
+    }
+  }, [udctData, isOpen, mvd, mvd2, mdh, mode]);
+
   // Viewport keyboard sync ref
   const drawerRef = useRef(null);
 
@@ -131,50 +193,6 @@ export default function HangHoanDrawer({
 
 
 
-  const tryAutoFill = (val, fieldName) => {
-    if (mode !== 'create') return;
-    const cleanVal = val.trim().toLowerCase();
-    if (!cleanVal) return;
-    
-    const match = [...udctData].reverse().find(u => {
-      const mvdVal = (u.mvd || '').trim().toLowerCase();
-      const mdhVal = (u.mdh || '').trim().toLowerCase();
-      if (fieldName === 'mvd' || fieldName === 'mvd2') {
-         return (mvdVal === cleanVal && cleanVal !== '') || (mdhVal === cleanVal && cleanVal !== '');
-      }
-      if (fieldName === 'mdh') {
-         return (mdhVal === cleanVal && cleanVal !== '') || (mvdVal === cleanVal && cleanVal !== '');
-      }
-      return false;
-    });
-    
-    if (match) {
-      if (match.ma_gian) setMaGian(match.ma_gian);
-      if (fieldName !== 'mdh' && match.mdh) setMdh(match.mdh);
-      
-      // Chú ý: Ta chỉ tự động điền MVD nếu đang nhập ở MDH, còn MVD2 thì không nên đè MVD
-      if (fieldName === 'mdh' && match.mvd && !mvd) setMvd(match.mvd);
-      
-      if (match.ngay) setNgayNhan(toYMD(match.ngay) || getTodayYmd());
-      
-      const skuCtVal = match.id_sp_ct || '';
-      let finalSku = skuCtVal ? skuCtVal.substring(0, 4) : (match.sku_shop_up || match.id_sp || '');
-      let finalTenSp = match.ten_sp || '';
-      
-      if (skuCtVal && (!finalSku || !finalTenSp)) {
-        const sp = sanphamData.find((s) => (s.sku_ct || s.id_sp_ct || s.sku_con || '').toLowerCase() === skuCtVal.toLowerCase());
-        if (sp) {
-          if (!finalSku) finalSku = sp.sku || sp.id_sp || '';
-          if (!finalTenSp) finalTenSp = sp.ten_sp || sp.ten || '';
-        }
-      }
-      
-      if (skuCtVal) setSkuCt(skuCtVal);
-      if (finalSku) setSku(finalSku);
-      if (finalTenSp) setTenSp(finalTenSp);
-      if (match.slg_xuat || match.so_luong) setSlg(parseFloat(match.slg_xuat || match.so_luong) || 1);
-    }
-  };
 
   const getSmartSuggestions = (text, currentMaGian) => {
     const q = text.trim().toLowerCase();
@@ -296,19 +314,19 @@ export default function HangHoanDrawer({
     }
     setMvdSuggestions(getSmartSuggestions(val, maGian));
     checkDuplicateNotice(cleanVal);
-    tryAutoFill(cleanVal, 'mvd');
+
   };
 
   const handleMvd2Input = (val) => {
     setMvd2(val);
     setMvd2Suggestions(getSmartSuggestions(val, maGian));
-    tryAutoFill(val, 'mvd2');
+
   };
 
   const handleMdhInput = (val) => {
     setMdh(val);
     setMdhSuggestions(getSmartSuggestions(val, maGian));
-    tryAutoFill(val, 'mdh');
+
   };
 
   // Image Upload handler (Convert to base64 or upload to ImgBB)
