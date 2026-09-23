@@ -138,7 +138,7 @@ export default function HangHoanPage() {
   const ensureUdctData = useCallback(async () => {
     if (udctData.length > 0) return udctData;
     try {
-      const udctRows = await fetchSheetData(CONFIG.udctSheetName, 'A1:AF20000');
+      const udctRows = await fetchSheetData(CONFIG.udctSheetName, 'A1:AF900000');
       if (udctRows && udctRows.length > 1) {
         const parsedUdct = udctRows.slice(1).map((row, idx) => ({
           rowIndex: idx + 2,

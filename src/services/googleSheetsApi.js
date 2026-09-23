@@ -8,19 +8,19 @@ let tokenRequestPromise = null;
 
 const SHEET_RANGES = {
   default: {
-    read: 'A1:AF10000',
-    clear: 'A2:AF10000',
+    read: 'A1:AF900000',
+    clear: 'A2:AF900000',
     append: 'A:A'
   },
   UD_CT: {
-    read: 'A1:AF100000',
-    clear: 'A2:AF100000',
+    read: 'A1:AF900000',
+    clear: 'A2:AF900000',
     append: 'A:A'
   },
   HH_BH: { read: 'A:Z', append: 'A:A', clear: 'A2:Z' },
   DH_CT: { read: 'A:P', append: 'A:A', clear: 'A2:P' },
   TON_KHO: { read: 'A:K', clear: 'A2:K' },
-  BAN_DON: { read: 'A1:AF10000', clear: 'A2:AF10000', append: 'A:A' },
+  BAN_DON: { read: 'A1:AF900000', clear: 'A2:AF900000', append: 'A:A' },
   HH_SHOP_DIEN: { read: 'A:Z', append: 'A:A', clear: 'A2:Z' }
 };
 
