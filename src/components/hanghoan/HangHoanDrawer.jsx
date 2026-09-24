@@ -136,6 +136,22 @@ export default function HangHoanDrawer({
     }
   }, [udctData, isOpen, mvd, mvd2, mdh, mode]);
 
+  useEffect(() => {
+    if (!skuCt) {
+      setTenSp('');
+    } else {
+      let sp = sanphamData.find(s => (s.sku_ct || s.id_sp_ct || s.sku_con || '').toLowerCase() === skuCt.toLowerCase());
+      if (sp && (sp.ten_sp || sp.ten)) {
+        setTenSp(sp.ten_sp || sp.ten);
+      } else {
+        let u = udctData.find(u => (u.sku_ct || u.id_sp_ct || '').toLowerCase() === skuCt.toLowerCase() && u.ten_sp);
+        if (u) {
+          setTenSp(u.ten_sp);
+        }
+      }
+    }
+  }, [skuCt, sanphamData, udctData]);
+
   // Viewport keyboard sync ref
   const drawerRef = useRef(null);
 
@@ -606,46 +622,7 @@ export default function HangHoanDrawer({
               </div>
             </div>
 
-                          {/* MVD 2 */}
-              <div className="col-span-2 relative">
-                <div className="flex gap-1.5">
-                  <div className="relative flex-1">
-                    <input
-                      type="text"
-                      value={mvd2}
-                      onChange={(e) => handleMvd2Input(e.target.value)}
-                      onFocus={(e) => handleMvd2Input(e.target.value)}
-                      placeholder="MVD 2 (Mã phụ)..."
-                      className="w-full pl-3 pr-8 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20"
-                    />
-                    {mvd2 && (
-                      <button
-                        type="button"
-                        onClick={() => { setMvd2(''); setMvd2Suggestions([]); }}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onOpenQrScan((code) => { setMvd2(code); setMvd2Suggestions([]); })}
-                    className="px-3 py-2 border border-slate-200 rounded-lg text-xs bg-slate-50 hover:bg-slate-100 font-bold flex items-center gap-1 shrink-0"
-                  >
-                    <Camera className="w-4 h-4 text-indigo-600" />
-                    <span>QR</span>
-                  </button>
-                </div>
-                
-                {mvd2Suggestions.length > 0 && (
-                  <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto">
-                    {mvd2Suggestions.map((item, i) => renderSuggestionItem(item, 'mvd2', i))}
-                  </div>
-                )}
-              </div>
-
-              {/* Duplicate MVD Notice */}
+                          {/* Duplicate MVD Notice */}
             {duplicateMvdNotice && (
               <div className="col-span-2">
                 <div className="bg-amber-50 text-amber-700 px-3 py-2 rounded-lg border border-amber-200 text-xs font-bold flex gap-2 items-center">
@@ -819,40 +796,53 @@ export default function HangHoanDrawer({
               <input
                 type="text"
                 value={tenSp}
-                onChange={(e) => setTenSp(e.target.value)}
-                placeholder="Tên sản phẩm..."
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500/20"
+                readOnly
+                placeholder="Tên sản phẩm (tự động theo SKU CT)..."
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-500 bg-slate-50 outline-none cursor-not-allowed"
               />
             </div>
 
-            {/* Ngày nhận with Steppers */}
-            <div className="col-span-2">
-              <div className="flex items-center h-8">
-                <span className="px-2 text-[10px] font-bold text-slate-500 bg-slate-100 border border-r-0 border-slate-200 rounded-l-lg h-full flex items-center uppercase whitespace-nowrap">Ngày nhận</span>
-                <button
-                  type="button"
-                  onClick={() => setNgayNhan((prev) => shiftDate(prev, -1))}
-                  className="w-8 h-full flex items-center justify-center border border-slate-200 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
-                >
-                  -
-                </button>
-                <input
-                  type="date"
-                  value={ngayNhan}
-                  onChange={(e) => setNgayNhan(e.target.value)}
-                  className="flex-1 w-full h-full text-center border-y border-slate-200 text-[11px] font-semibold text-slate-800 outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={() => setNgayNhan((prev) => shiftDate(prev, 1))}
-                  className="w-8 h-full flex items-center justify-center border border-slate-200 rounded-r-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
-                >
-                  +
-                </button>
+{/* MVD 2 */}
+              <div className="col-span-2 relative">
+                <div className="flex gap-1.5">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={mvd2}
+                      onChange={(e) => handleMvd2Input(e.target.value)}
+                      onFocus={(e) => handleMvd2Input(e.target.value)}
+                      placeholder="MVD 2 (Mã phụ)..."
+                      className="w-full pl-3 pr-8 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20"
+                    />
+                    {mvd2 && (
+                      <button
+                        type="button"
+                        onClick={() => { setMvd2(''); setMvd2Suggestions([]); }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onOpenQrScan((code) => { setMvd2(code); setMvd2Suggestions([]); })}
+                    className="px-3 py-2 border border-slate-200 rounded-lg text-xs bg-slate-50 hover:bg-slate-100 font-bold flex items-center gap-1 shrink-0"
+                  >
+                    <Camera className="w-4 h-4 text-indigo-600" />
+                    <span>QR</span>
+                  </button>
+                </div>
+                
+                {mvd2Suggestions.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto">
+                    {mvd2Suggestions.map((item, i) => renderSuggestionItem(item, 'mvd2', i))}
+                  </div>
+                )}
               </div>
-            </div>
 
-                        {/* MDH */}
+              
+{/* MDH */}
             <div className="col-span-2 relative">
               <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Mã đơn hàng (MDH)</label>
               <div className="flex gap-1.5">
@@ -884,7 +874,37 @@ export default function HangHoanDrawer({
               )}
             </div>
 
-            {/* 3 Real Photos Upload */}
+            
+{/* Ngày nhận with Steppers */}
+            <div className="col-span-2">
+              <div className="flex items-center h-8">
+                <span className="px-2 text-[10px] font-bold text-slate-500 bg-slate-100 border border-r-0 border-slate-200 rounded-l-lg h-full flex items-center uppercase whitespace-nowrap">Ngày nhận</span>
+                <button
+                  type="button"
+                  onClick={() => setNgayNhan((prev) => shiftDate(prev, -1))}
+                  className="w-8 h-full flex items-center justify-center border border-slate-200 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
+                >
+                  -
+                </button>
+                <input
+                  type="date"
+                  value={ngayNhan}
+                  onChange={(e) => setNgayNhan(e.target.value)}
+                  className="flex-1 w-full h-full text-center border-y border-slate-200 text-[11px] font-semibold text-slate-800 outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setNgayNhan((prev) => shiftDate(prev, 1))}
+                  className="w-8 h-full flex items-center justify-center border border-slate-200 rounded-r-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+
+            
+                        {/* 3 Real Photos Upload */}
             <div className="col-span-2 space-y-1.5 pt-1">
               <div className="text-[10px] font-bold text-slate-400 uppercase">Ảnh thực tế (Tối đa 3 ảnh)</div>
               <div className="grid grid-cols-3 gap-2">
