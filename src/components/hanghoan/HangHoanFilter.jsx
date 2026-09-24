@@ -210,7 +210,7 @@ export default function HangHoanFilter(props) {
       <div className="flex flex-wrap items-center gap-2 lg:gap-3">
         {/* 1. Số đơn */}
         <div className="text-[11px] font-bold text-slate-600 uppercase tracking-tight bg-slate-100 px-2.5 py-1.5 rounded-lg border border-slate-200 shrink-0">
-          Số đơn: {Number(count).toLocaleString('vi-VN')}
+          <span className="hidden sm:inline">SỐ ĐƠN: </span>{Number(count).toLocaleString('vi-VN')}
         </div>
 
         {/* 2. Load */}
@@ -267,7 +267,7 @@ export default function HangHoanFilter(props) {
              <ChevronLeft className="w-4 h-4"/>
            </button>
            <div 
-             className="h-8 px-3 flex items-center justify-center bg-slate-50 border border-slate-200 text-[11px] font-bold text-indigo-700 min-w-[110px] text-center cursor-pointer hover:bg-indigo-50 transition-colors"
+             className="h-8 px-1.5 sm:px-3 flex items-center justify-center bg-slate-50 border border-slate-200 text-[11px] font-bold text-indigo-700 min-w-[80px] sm:min-w-[110px] text-center cursor-pointer hover:bg-indigo-50 transition-colors"
              onClick={() => setIsFilterOpen(true)}
              title="Nhấn để chọn ngày cụ thể"
            >

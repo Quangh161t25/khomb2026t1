@@ -1,3 +1,4 @@
+import { Plus } from 'lucide-react';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -784,6 +785,16 @@ export default function HangHoanPage() {
           />
         )}
       </div>
+
+      
+      {/* Floating Action Button (Mobile Only) */}
+      <button
+        type="button"
+        onClick={handleOpenCreate}
+        className="sm:hidden fixed bottom-6 right-6 w-14 h-14 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-2xl hover:bg-indigo-700 active:scale-95 transition-all z-40"
+      >
+        <Plus className="w-6 h-6" />
+      </button>
 
       {/* Edit / Create Drawer */}
       <HangHoanDrawer
