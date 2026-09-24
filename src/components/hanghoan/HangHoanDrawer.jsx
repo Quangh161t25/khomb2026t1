@@ -56,6 +56,23 @@ export default function HangHoanDrawer({
   const [mvdSuggestions, setMvdSuggestions] = useState([]);
   const [mvd2Suggestions, setMvd2Suggestions] = useState([]);
   const [mdhSuggestions, setMdhSuggestions] = useState([]);
+  const [maGianSuggestions, setMaGianSuggestions] = useState([]);
+
+  const uniqueMaGianList = React.useMemo(() => {
+    return [...new Set(udctData.map(i => (i.ma_gian || '').trim()).filter(Boolean))].sort();
+  }, [udctData]);
+
+  const handleMaGianInput = (val) => {
+    setMaGian(val);
+    if (!val.trim()) {
+      setMaGianSuggestions(uniqueMaGianList.slice(0, 20));
+      return;
+    }
+    const q = val.trim().toLowerCase();
+    const matches = uniqueMaGianList.filter(m => m.toLowerCase().includes(q));
+    setMaGianSuggestions(matches.slice(0, 20));
+  };
+
 
 
   // Tự động điền dữ liệu khi UD_CT được load hoặc khi MVD/MVD2/MDH thay đổi
@@ -638,15 +655,38 @@ export default function HangHoanDrawer({
               </div>
             )}
 
-            {/* Mã gian */}
-            <div>
+                        {/* Mã gian */}
+            <div className="relative z-40">
               <input
                 type="text"
                 value={maGian}
-                onChange={(e) => setMaGian(e.target.value)}
+                onChange={(e) => handleMaGianInput(e.target.value)}
+                onFocus={(e) => handleMaGianInput(e.target.value)}
                 placeholder="Mã gian..."
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500/20"
+                className="w-full pl-3 pr-8 py-2 border border-slate-200 rounded-lg text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500/20"
               />
+              {maGian && (
+                <button
+                  type="button"
+                  onClick={() => { handleMaGianInput(''); setMaGianSuggestions([]); }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                >
+                  ✕
+                </button>
+              )}
+              {maGianSuggestions.length > 0 && (
+                <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto">
+                  {maGianSuggestions.map((item, i) => (
+                    <div
+                      key={i}
+                      onClick={() => { setMaGian(item); setMaGianSuggestions([]); }}
+                      className="p-2 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-0 text-xs font-medium text-slate-700"
+                    >
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* SKU CT with Auto-suggestions */}
@@ -656,8 +696,17 @@ export default function HangHoanDrawer({
                 value={skuCt}
                 onChange={(e) => handleSkuCtInput(e.target.value)}
                 placeholder="SKU chi tiết (SKU CT)..."
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-bold text-indigo-700 outline-none focus:ring-2 focus:ring-blue-500/20"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-bold text-indigo-700 outline-none focus:ring-2 focus:ring-blue-500/20 pr-8"
               />
+              {skuCt && (
+                <button
+                  type="button"
+                  onClick={() => { handleSkuCtInput(""); }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                >
+                  ✕
+                </button>
+              )}
 
               {skuCtSuggestions.length > 0 && (
                 <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto">
