@@ -24,6 +24,8 @@ import BaoCaoPage from './pages/BaoCao';
 import BaoCaoTongPage from './pages/BaoCaoTong';
 import BCHangHoanPage from './pages/BCHangHoan';
 import HHShopDienPage from './pages/HHShopDien';
+import { fetchSheetData } from './services/googleSheetsApi';
+import { CONFIG } from './config/config';
 
 // Route & Metadata Configurations
 export const MODULE_ROUTES = {
@@ -141,6 +143,26 @@ function MainApp() {
   const [activeModule, setActiveModuleState] = useState(() => getModuleFromLocation());
 
   // Function to switch module and update browser address bar
+
+  // Background Prefetch: Âm thầm tải trước dữ liệu nặng để khi bấm sang trang sẽ load ngay lập tức
+  React.useEffect(() => {
+    if (user) {
+      const timer = setTimeout(() => {
+        console.log('[Prefetch] Bắt đầu tải ngầm các dữ liệu nặng (UD_CT, HH_BH, DH_CT, v.v.)...');
+        Promise.allSettled([
+          fetchSheetData(CONFIG.udctSheetName, 'A1:AF900000'), // UD_CT cho UP Đơn / Hàng hoàn
+          fetchSheetData(`${CONFIG.hhbhSheetName}!A:Z`),       // HH_BH cho Hàng hoàn
+          fetchSheetData(`${CONFIG.dhctSheetName}!A:P`),       // DH_CT cho UP Đơn
+          fetchSheetData(CONFIG.sanphamSheetName),             // SAN_PHAM chung
+          fetchSheetData(`${CONFIG.sanphamSheetName}!A:G`)     // SAN_PHAM cho UP Đơn
+        ]).then(() => {
+          console.log('[Prefetch] Hoàn tất tải ngầm 100%!');
+        });
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [user]);
+
   const setActiveModule = (moduleId, replace = false) => {
     setActiveModuleState(moduleId);
     const route = MODULE_ROUTES[moduleId] || MODULE_ROUTES.home;
