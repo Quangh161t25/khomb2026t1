@@ -360,51 +360,60 @@ export default function HangHoanDrawer({
       return;
     }
 
-    const udctMatches = [];
+    const allMatches = [];
     const seen = new Set();
     
-    for (const item of udctData) {
-      const ct = (item.sku_ct || item.id_sp_ct || '').toLowerCase();
+    // Tìm trong udctData (lấy từ mới nhất)
+    for (let i = udctData.length - 1; i >= 0; i--) {
+      const item = udctData[i];
+      const realSkuCt = item.sku_ct || item.id_sp_ct || '';
+      
+      // Lấy ký tự > 5
+      if (realSkuCt.length <= 5) continue;
+      
+      const ct = realSkuCt.toLowerCase();
       const main = (item.sku_shop_up || item.id_sp || '').toLowerCase();
       const name = (item.ten_sp || '').toLowerCase();
       
       if (ct.includes(q) || main.includes(q) || name.includes(q)) {
-        const key = ct || main;
-        if (key && !seen.has(key)) {
-          seen.add(key);
-          udctMatches.push({
-            sku_ct: item.id_sp_ct,
+        if (!seen.has(realSkuCt)) {
+          seen.add(realSkuCt);
+          allMatches.push({
+            sku_ct: realSkuCt,
             sku: item.id_sp || item.sku_shop_up,
             ten_sp: item.ten_sp
           });
-          if (udctMatches.length >= 8) break;
         }
       }
     }
 
-    const spMatches = [];
-    if (udctMatches.length < 8) {
-      for (const s of sanphamData) {
-        const ct = (s.sku_ct || s.id_sp_ct || s.sku_con || '').toLowerCase();
-        const main = (s.sku || s.id_sp || '').toLowerCase();
-        const name = (s.ten_sp || '').toLowerCase();
-        
-        if (ct.includes(q) || main.includes(q) || name.includes(q)) {
-          const key = ct || main;
-          if (key && !seen.has(key)) {
-            seen.add(key);
-            spMatches.push({
-              sku_ct: s.sku_con || '',
-              sku: s.id_sp,
-              ten_sp: s.ten_sp || s.ten
-            });
-            if (udctMatches.length + spMatches.length >= 8) break;
-          }
+    // Tìm trong sanphamData
+    for (const s of sanphamData) {
+      const realSkuCt = s.sku_ct || s.id_sp_ct || s.sku_con || '';
+      
+      // Lấy ký tự > 5
+      if (realSkuCt.length <= 5) continue;
+
+      const ct = realSkuCt.toLowerCase();
+      const main = (s.sku || s.id_sp || '').toLowerCase();
+      const name = (s.ten_sp || '').toLowerCase();
+      
+      if (ct.includes(q) || main.includes(q) || name.includes(q)) {
+        if (!seen.has(realSkuCt)) {
+          seen.add(realSkuCt);
+          allMatches.push({
+            sku_ct: realSkuCt,
+            sku: s.id_sp,
+            ten_sp: s.ten_sp || s.ten
+          });
         }
       }
     }
 
-    setSkuCtSuggestions([...udctMatches, ...spMatches]);
+    // Sắp xếp Z-A
+    allMatches.sort((a, b) => (b.sku_ct || '').localeCompare(a.sku_ct || ''));
+
+    setSkuCtSuggestions(allMatches.slice(0, 15));
   };
 
   const selectSkuCt = (item) => {
