@@ -35,6 +35,7 @@ import {
   Clock,
 } from 'lucide-react';
 import DhctOrderModal from '../components/donchitiet/DhctOrderModal';
+import { useAutoSync } from '../hooks/useAutoSync';
 
 export default function DonChiTietPage() {
   const { showToast } = useToast();
@@ -94,8 +95,8 @@ export default function DonChiTietPage() {
     loadData();
   };
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
     try {
       const [dhRows, spRows] = await Promise.all([
         fetchSheetData(`${CONFIG.dhctSheetName}!A:P`),
@@ -140,13 +141,16 @@ export default function DonChiTietPage() {
       console.error('Error loading DH_CT:', err);
       showToast('Lỗi khi tải DH_CT: ' + err.message, 'error');
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   }, [showToast]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Tự động quét Realtime ngầm mỗi 25s và làm mới khi quay lại tab
+  useAutoSync(loadData, { sheetName: CONFIG.dhctSheetName });
 
   // Compute Cumulative Stocks globally
   const dataWithStock = useMemo(() => {

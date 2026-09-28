@@ -115,7 +115,7 @@ export default function HangHoanDrawer({
     if (match) {
       if (match.ma_gian) setMaGian(match.ma_gian);
       if (field !== 'mdh' && match.mdh) setMdh(match.mdh);
-      if (field === 'mdh' && match.mvd && !mvd) setMvd(match.mvd);
+      if (field === 'mdh' && match.mvd && !mvd2) setMvd2(match.mvd);
       
       const skuCtVal = match.id_sp_ct || '';
       let finalSku = skuCtVal ? skuCtVal.substring(0, 4) : (match.sku_shop_up || match.id_sp || '');
@@ -268,12 +268,14 @@ export default function HangHoanDrawer({
       setMvd2(item.mvd || item.mdh || '');
     } else if (targetField === 'mdh') {
       setMdh(item.mdh || item.mvd || '');
+      if (item.mvd) {
+        setMvd2(item.mvd);
+      }
     }
     
     if (mode === 'create') {
       if (item.ma_gian) setMaGian(item.ma_gian);
       if (targetField !== 'mdh' && item.mdh) setMdh(item.mdh);
-      if (item.ngay) setNgayNhan(toYMD(item.ngay) || getTodayYmd());
       
       const skuCtVal = item.id_sp_ct || '';
       let finalSku = skuCtVal ? skuCtVal.substring(0, 4) : (item.sku_shop_up || item.id_sp || '');

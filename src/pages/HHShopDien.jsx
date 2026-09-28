@@ -72,8 +72,8 @@ export default function HHShopDienPage() {
     ghi_chu: '',
   });
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
     try {
       const [shopRows, udctRows] = await Promise.all([
         fetchSheetData(`${CONFIG.hhShopDienSheetName}!A:M`),
@@ -117,13 +117,16 @@ export default function HHShopDienPage() {
       console.error('Error loading HH_SHOP_DIEN:', err);
       showToast('Lỗi khi tải HH_SHOP_DIEN: ' + err.message, 'error');
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   }, [showToast]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Tự động quét Realtime ngầm mỗi 25s và làm mới khi quay lại tab
+  useAutoSync(loadData, { sheetName: CONFIG.hhShopDienSheetName });
 
   // Distinct Store List
   const maGianList = useMemo(() => {

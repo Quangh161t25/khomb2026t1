@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { ColumnWidthProvider } from './context/ColumnWidthContext';
+import { SyncProvider } from './context/SyncContext';
 import SettingsModal from './components/settings/SettingsModal';
 import ErrorBoundary from './components/common/ErrorBoundary';
 
@@ -263,8 +264,10 @@ export default function App() {
       <ToastProvider>
         <AuthProvider>
           <ColumnWidthProvider>
-            <MainApp />
-            <SettingsModal />
+            <SyncProvider>
+              <MainApp />
+              <SettingsModal />
+            </SyncProvider>
           </ColumnWidthProvider>
         </AuthProvider>
       </ToastProvider>

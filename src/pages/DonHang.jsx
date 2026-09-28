@@ -19,6 +19,7 @@ import {
 } from '../utils/dateUtils';
 import { matchMultiKeyword } from '../utils/searchUtils';
 import * as XLSX from 'xlsx';
+import { useAutoSync } from '../hooks/useAutoSync';
 import {
   Search,
   RotateCw,
@@ -123,8 +124,8 @@ export default function DonHangPage() {
   const autoSaveTimerRef = useRef(null);
 
   // Load Data
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
     try {
       const [udctRows, spRows] = await Promise.all([
         fetchSheetData(`${CONFIG.udctSheetName}!A:AE`),
@@ -175,13 +176,16 @@ export default function DonHangPage() {
       console.error('Error loading UDCT data:', err);
       showToast('Lỗi khi tải dữ liệu đơn chi tiết: ' + err.message, 'error');
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   }, [showToast]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Tự động quét Realtime ngầm mỗi 25s và làm mới khi quay lại tab
+  useAutoSync(loadData, { sheetName: CONFIG.udctSheetName });
 
   // Quick Date Setters
   const setQuickDate = (type) => {

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useToast } from '../context/ToastContext';
 import { useColumnWidths } from '../context/ColumnWidthContext';
 import ResizableTh from '../components/common/ResizableTh';
+import { useAutoSync } from '../hooks/useAutoSync';
 import FooterPortal from '../components/common/FooterPortal';
 import Pagination from '../components/common/Pagination';
 import { CONFIG } from '../config/config';
@@ -53,8 +54,8 @@ export default function InventoryPage() {
   // Inline editing state
   const [editingCell, setEditingCell] = useState(null); // { rowIndex, colKey, val }
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
     try {
       const [invRows, dhctRows] = await Promise.all([
         fetchSheetData(`${CONFIG.inventorySheetName}!A:K`),
@@ -115,13 +116,16 @@ export default function InventoryPage() {
       console.error('Error loading inventory:', err);
       showToast('Lỗi khi tải dữ liệu tồn kho: ' + err.message, 'error');
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   }, [showToast]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Tự động quét Realtime ngầm mỗi 25s và làm mới khi quay lại tab
+  useAutoSync(loadData, { sheetName: CONFIG.inventorySheetName });
 
   // Handle Sort
   const handleSort = (col) => {

@@ -19,6 +19,7 @@ import HangHoanCardList from '../components/hanghoan/HangHoanCardList';
 import HangHoanDrawer from '../components/hanghoan/HangHoanDrawer';
 import ImagePreviewModal from '../components/common/ImagePreviewModal';
 import QRScannerModal from '../components/common/QRScannerModal';
+import { useAutoSync } from '../hooks/useAutoSync';
 
 export default function HangHoanPage() {
   const { user } = useAuth();
@@ -67,11 +68,11 @@ export default function HangHoanPage() {
   };
 
   // Load All Required Data (HH_BH, DS_SP, UD_CT)
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
     try {
       // 1. Load Hang Hoan
-      const rows = await fetchSheetData(`${CONFIG.hhbhSheetName}!A:Z`);
+      const rows = await fetchSheetData(`${CONFIG.hhbhSheetName}!A:Z`, null, true);
       if (rows && rows.length > 1) {
         const parsed = rows.slice(1).map((row, idx) => ({
           rowIndex: idx + 2,
@@ -110,7 +111,7 @@ export default function HangHoanPage() {
       console.error('Error loading Hang Hoan data:', err);
       showToast('Lỗi khi tải dữ liệu Hàng hoàn: ' + err.message, 'error');
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   }, [showToast]);
 
@@ -173,6 +174,9 @@ export default function HangHoanPage() {
       ensureUdctData();
     }
   }, [loadData, ensureSanphamData, ensureUdctData]);
+
+  // Tự động quét Realtime ngầm mỗi 25s và làm mới khi quay lại tab
+  useAutoSync(loadData, { sheetName: CONFIG.hhbhSheetName });
 
   // Compute Distinct Values for Filters
   const khoList = useMemo(() => {

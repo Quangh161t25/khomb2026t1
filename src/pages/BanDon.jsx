@@ -20,6 +20,7 @@ import {
   Package,
 } from 'lucide-react';
 import QRScannerModal from '../components/common/QRScannerModal';
+import { useAutoSync } from '../hooks/useAutoSync';
 
 const BAN_DON_KHUNG_OPTIONS = ['8H', '9H', '10H', '11H', '13H', '14H', '15H', '16H'];
 
@@ -60,8 +61,8 @@ export default function BanDonPage() {
   const normalizeBanDonDate = (val) => toYMD(val) || parseDmyToYmd(val) || '';
 
   // Load Data
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
     try {
       // 1. Fetch BAN_DON
       const rows = await fetchSheetData(`${CONFIG.banDonSheetName}!A:C`);
@@ -119,13 +120,16 @@ export default function BanDonPage() {
       console.error('Error loading Ban Don:', err);
       showToast('Lỗi khi tải sheet BAN_DON: ' + err.message, 'error');
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   }, [showToast]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Tự động quét Realtime ngầm mỗi 25s và làm mới khi quay lại tab
+  useAutoSync(loadData, { sheetName: CONFIG.banDonSheetName });
 
   // Sync add inputs with filters
   useEffect(() => {

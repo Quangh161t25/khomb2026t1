@@ -18,6 +18,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useColumnWidths } from '../context/ColumnWidthContext';
 import NotificationPopover from '../components/common/NotificationPopover';
+import { useSync } from '../context/SyncContext';
 import { syncOfflineQueue, getOfflineQueue } from '../services/offlineSync';
 import { appendSheetData } from '../services/googleSheetsApi';
 
@@ -32,8 +33,9 @@ export default function Header({
   const activeUser = user || currentUser;
   const { openSettings } = useColumnWidths();
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const { isSyncing: isAutoSyncing, triggerSync, lastSyncTime } = useSync();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [isOfflineSyncing, setIsOfflineSyncing] = useState(false);
   const [queueCount, setQueueCount] = useState(0);
   const menuRef = useRef(null);
 
@@ -47,11 +49,11 @@ export default function Header({
 
     const handleOnline = async () => {
       setIsOnline(true);
-      setIsSyncing(true);
+      setIsOfflineSyncing(true);
       await syncOfflineQueue(appendSheetData);
       const q = await getOfflineQueue();
       setQueueCount(q.length);
-      setIsSyncing(false);
+      setIsOfflineSyncing(false);
     };
 
     const handleOffline = () => {
@@ -143,22 +145,37 @@ export default function Header({
       {/* Right Side: Status Badge, Notifications, Settings, Profile */}
       <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
 
-        {/* Live Status Pill */}
-          {/* Network Indicator */}
-          <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold shadow-2xs transition-all ${isOnline ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
-            {isSyncing ? (
-              <RefreshCcw className="w-4 h-4 animate-spin text-blue-600" />
-            ) : isOnline ? (
-              <Wifi className="w-4 h-4" />
-            ) : (
-              <WifiOff className="w-4 h-4" />
-            )}
-            <span>
-              {isSyncing ? 'Đồng bộ...' : isOnline ? (queueCount > 0 ? `Đã online (${queueCount})` : 'Online') : `Offline (${queueCount})`}
-            </span>
-          </div>
+        {/* Realtime Google Sheets Indicator with pulsing green dot */}
+        <button
+          type="button"
+          onClick={triggerSync}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800 text-xs font-bold shadow-2xs transition-all cursor-pointer group"
+          title={`Đang kết nối Realtime với Google Sheets\n- Tự động quét ngầm: mỗi 25 giây\n- Tự làm mới: khi quay lại tab trình duyệt\n- Lần quét cuối: ${lastSyncTime ? new Date(lastSyncTime).toLocaleTimeString('vi-VN') : 'Vừa xong'}\n(Bấm vào đây để làm mới dữ liệu ngay)`}
+        >
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <span className="hidden lg:inline">Đang kết nối Realtime với Google Sheets</span>
+          <span className="inline lg:hidden">Realtime</span>
+          <RefreshCcw className={`w-3.5 h-3.5 text-emerald-600 group-hover:rotate-180 transition-transform duration-300 ${isAutoSyncing ? 'animate-spin' : ''}`} />
+        </button>
 
-          <NotificationPopover />
+        {/* Network & Offline Queue Indicator */}
+        <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold shadow-2xs transition-all ${isOnline ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
+          {isOfflineSyncing ? (
+            <RefreshCcw className="w-4 h-4 animate-spin text-blue-600" />
+          ) : isOnline ? (
+            <Wifi className="w-4 h-4" />
+          ) : (
+            <WifiOff className="w-4 h-4" />
+          )}
+          <span>
+            {isOfflineSyncing ? 'Đồng bộ...' : isOnline ? (queueCount > 0 ? `Đã online (${queueCount})` : 'Online') : `Offline (${queueCount})`}
+          </span>
+        </div>
+
+        <NotificationPopover />
 
         {/* Dedicated "Cài đặt" Button */}
         <button
