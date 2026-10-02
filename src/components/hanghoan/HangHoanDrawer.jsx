@@ -753,7 +753,7 @@ export default function HangHoanDrawer({
                     value={mvd}
                     onChange={(e) => handleMvdChange(e.target.value)}
                     placeholder="Mã vận đơn chính (MVD)... *"
-                    className="w-full pl-3 pr-8 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20"
+                    className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20"
                   />
                   {mvd && (
                     <button
@@ -768,7 +768,7 @@ export default function HangHoanDrawer({
                 <button
                   type="button"
                   onClick={() => onOpenQrScan((code) => handleMvdChange(code))}
-                  className="px-3 py-2 border border-slate-200 rounded-lg text-xs bg-slate-50 hover:bg-slate-100 font-bold flex items-center gap-1 shrink-0"
+                  className="px-3 py-2 border border-slate-300 rounded-lg text-xs bg-slate-50 hover:bg-slate-100 font-bold flex items-center gap-1 shrink-0"
                 >
                   <Camera className="w-4 h-4 text-indigo-600" />
                   <span>QR</span>
@@ -796,7 +796,7 @@ export default function HangHoanDrawer({
                 onFocus={(e) => handleMaGianInput(e.target.value)}
                 placeholder="Mã gian (gõ > 3 ký tự để tìm SKU CT)..."
                 title="Mã gian (3 ký tự). Nếu gõ > 3 ký tự (VD: z068) sẽ hiện gợi ý SKU CT"
-                className="w-full pl-3 pr-8 py-2 border border-slate-200 rounded-lg text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500/20"
+                className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-lg text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500/20"
               />
               {(maGian || maGianSuggestions.length > 0 || maGianSkuCtSuggestions.length > 0) && (
                 <button
@@ -909,7 +909,7 @@ export default function HangHoanDrawer({
                 }}
                 placeholder="SKU chi tiết (10 ký tự)..."
                 title="SKU Chi tiết (10 ký tự - VD: Z068-WH-00, 201B-NA-00...)"
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-bold text-indigo-700 outline-none focus:ring-2 focus:ring-blue-500/20 pr-8"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold text-indigo-700 outline-none focus:ring-2 focus:ring-blue-500/20 pr-8"
               />
               {(skuCt || skuCtSuggestions.length > 0 || detectedMaGianInSkuCt) && (
                 <button
@@ -987,18 +987,18 @@ export default function HangHoanDrawer({
                 value={sku}
                 onChange={(e) => setSku(e.target.value)}
                 placeholder="Mã SKU..."
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs text-slate-700 bg-slate-50 outline-none focus:ring-2 focus:ring-blue-500/20"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-700 bg-slate-50 outline-none focus:ring-2 focus:ring-blue-500/20"
               />
             </div>
 
             {/* SLG with Steppers */}
             <div>
               <div className="flex items-center h-8">
-                <span className="px-2 text-[10px] font-bold text-slate-500 bg-slate-100 border border-r-0 border-slate-200 rounded-l-lg h-full flex items-center uppercase">SLG</span>
+                <span className="px-2 text-[10px] font-bold text-slate-500 bg-slate-100 border border-r-0 border-slate-300 rounded-l-lg h-full flex items-center uppercase">SLG</span>
                 <button
                   type="button"
                   onClick={() => setSlg((prev) => Math.max(1, prev - 1))}
-                  className="w-7 h-full flex items-center justify-center border border-slate-200 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
+                  className="w-7 h-full flex items-center justify-center border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
                 >
                   -
                 </button>
@@ -1007,12 +1007,12 @@ export default function HangHoanDrawer({
                   min="1"
                   value={slg}
                   onChange={(e) => setSlg(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="flex-1 w-full h-full text-center border-y border-slate-200 text-xs font-bold text-slate-900 outline-none"
+                  className="flex-1 w-full h-full text-center border-y border-slate-300 text-xs font-bold text-slate-900 outline-none"
                 />
                 <button
                   type="button"
                   onClick={() => setSlg((prev) => prev + 1)}
-                  className="w-7 h-full flex items-center justify-center border border-slate-200 rounded-r-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
+                  className="w-7 h-full flex items-center justify-center border border-slate-300 rounded-r-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
                 >
                   +
                 </button>
@@ -1021,7 +1021,7 @@ export default function HangHoanDrawer({
 
             {/* Hoàn / Trả */}
             <div>
-              <div className="flex items-center h-8 p-0.5 border border-slate-200 rounded-lg bg-slate-100 gap-1">
+              <div className="flex items-center h-8 p-0.5 border border-slate-300 rounded-lg bg-slate-100 gap-1">
                 {['Hoàn', 'Trả'].map((ht) => (
                   <button
                     key={ht}
@@ -1041,7 +1041,7 @@ export default function HangHoanDrawer({
 
             {/* Kho */}
             <div>
-              <div className="flex items-center h-8 p-0.5 border border-slate-200 rounded-lg bg-slate-100 gap-1">
+              <div className="flex items-center h-8 p-0.5 border border-slate-300 rounded-lg bg-slate-100 gap-1">
                 {['KHO', 'BH'].map((k) => (
                   <button
                     key={k}
@@ -1066,7 +1066,7 @@ export default function HangHoanDrawer({
                 value={tinhTrang}
                 onChange={(e) => setTinhTrang(e.target.value)}
                 placeholder="Tình trạng (vd: nguyên seal, vỡ vỏ, móp méo...)"
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500/20"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500/20"
               />
             </div>
 
@@ -1077,7 +1077,7 @@ export default function HangHoanDrawer({
                 value={tenSp}
                 readOnly
                 placeholder="Tên sản phẩm (tự động theo SKU CT)..."
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-500 bg-slate-50 outline-none cursor-not-allowed"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-500 bg-slate-50 outline-none cursor-not-allowed"
               />
             </div>
 
@@ -1091,7 +1091,7 @@ export default function HangHoanDrawer({
                       onChange={(e) => handleMvd2Input(e.target.value)}
                       onFocus={(e) => handleMvd2Input(e.target.value)}
                       placeholder="MVD 2 (Mã phụ)..."
-                      className="w-full pl-3 pr-8 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20"
+                      className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20"
                     />
                     {mvd2 && (
                       <button
@@ -1106,7 +1106,7 @@ export default function HangHoanDrawer({
                   <button
                     type="button"
                     onClick={() => onOpenQrScan((code) => { setMvd2(code); setMvd2Suggestions([]); })}
-                    className="px-3 py-2 border border-slate-200 rounded-lg text-xs bg-slate-50 hover:bg-slate-100 font-bold flex items-center gap-1 shrink-0"
+                    className="px-3 py-2 border border-slate-300 rounded-lg text-xs bg-slate-50 hover:bg-slate-100 font-bold flex items-center gap-1 shrink-0"
                   >
                     <Camera className="w-4 h-4 text-indigo-600" />
                     <span>QR</span>
@@ -1123,7 +1123,6 @@ export default function HangHoanDrawer({
               
 {/* MDH */}
             <div className="col-span-2 relative">
-              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Mã đơn hàng (MDH)</label>
               <div className="flex gap-1.5">
                 <div className="relative flex-1">
                   <input
@@ -1132,7 +1131,7 @@ export default function HangHoanDrawer({
                     onChange={(e) => handleMdhInput(e.target.value)}
                     onFocus={(e) => handleMdhInput(e.target.value)}
                     placeholder="Mã đơn hàng / Order ID..."
-                    className="w-full pl-3 pr-8 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20 uppercase"
+                    className="w-full pl-3 pr-8 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20 uppercase"
                   />
                   {mdh && (
                     <button
@@ -1157,11 +1156,11 @@ export default function HangHoanDrawer({
 {/* Ngày nhận with Steppers */}
             <div className="col-span-2">
               <div className="flex items-center h-8">
-                <span className="px-2 text-[10px] font-bold text-slate-500 bg-slate-100 border border-r-0 border-slate-200 rounded-l-lg h-full flex items-center uppercase whitespace-nowrap">Ngày nhận</span>
+                <span className="px-2 text-[10px] font-bold text-slate-500 bg-slate-100 border border-r-0 border-slate-300 rounded-l-lg h-full flex items-center uppercase whitespace-nowrap">Ngày nhận</span>
                 <button
                   type="button"
                   onClick={() => setNgayNhan((prev) => shiftDate(prev, -1))}
-                  className="w-8 h-full flex items-center justify-center border border-slate-200 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
+                  className="w-8 h-full flex items-center justify-center border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
                 >
                   -
                 </button>
@@ -1169,12 +1168,12 @@ export default function HangHoanDrawer({
                   type="date"
                   value={ngayNhan}
                   onChange={(e) => setNgayNhan(e.target.value)}
-                  className="flex-1 w-full h-full text-center border-y border-slate-200 text-[11px] font-semibold text-slate-800 outline-none"
+                  className="flex-1 w-full h-full text-center border-y border-slate-300 text-[11px] font-semibold text-slate-800 outline-none"
                 />
                 <button
                   type="button"
                   onClick={() => setNgayNhan((prev) => shiftDate(prev, 1))}
-                  className="w-8 h-full flex items-center justify-center border border-slate-200 rounded-r-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
+                  className="w-8 h-full flex items-center justify-center border border-slate-300 rounded-r-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
                 >
                   +
                 </button>
@@ -1194,7 +1193,7 @@ export default function HangHoanDrawer({
                 ].map(({ slot, val, setter }) => (
                   <div key={slot} className="relative aspect-square">
                     {val ? (
-                      <div className="relative w-full h-full group rounded-lg overflow-hidden border border-slate-200">
+                      <div className="relative w-full h-full group rounded-lg overflow-hidden border border-slate-300">
                         <img src={val} alt={`Ảnh ${slot}`} className="w-full h-full object-cover" />
                         <button
                           type="button"
@@ -1206,7 +1205,7 @@ export default function HangHoanDrawer({
                         </button>
                       </div>
                     ) : (
-                      <label className="w-full h-full flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-lg bg-slate-50 hover:bg-blue-50 hover:border-blue-300 transition-colors cursor-pointer p-2 text-center">
+                      <label className="w-full h-full flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-lg bg-slate-50 hover:bg-blue-50 hover:border-blue-300 transition-colors cursor-pointer p-2 text-center">
                         <Camera className="w-5 h-5 text-slate-400" />
                         <span className="text-[9px] font-bold text-slate-400 mt-1">Ảnh {slot}</span>
                         <input
