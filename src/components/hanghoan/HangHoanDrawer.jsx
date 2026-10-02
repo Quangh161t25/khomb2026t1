@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import {
@@ -57,20 +57,149 @@ export default function HangHoanDrawer({
   const [mvd2Suggestions, setMvd2Suggestions] = useState([]);
   const [mdhSuggestions, setMdhSuggestions] = useState([]);
   const [maGianSuggestions, setMaGianSuggestions] = useState([]);
+  const [maGianSkuCtSuggestions, setMaGianSkuCtSuggestions] = useState([]);
+  const [detectedMaGianInSkuCt, setDetectedMaGianInSkuCt] = useState('');
 
   const uniqueMaGianList = React.useMemo(() => {
     return [...new Set(udctData.map(i => (i.ma_gian || '').trim()).filter(Boolean))].sort();
   }, [udctData]);
 
+  // Hàm tìm kiếm gợi ý SKU CT dùng chung cho cả ô SKU CT và ô Mã gian
+  const searchSkuCtMatches = useCallback((query) => {
+    const q = (query || '').trim().toLowerCase();
+    if (!q) return [];
+
+    const allMatches = [];
+    const seen = new Set();
+    
+    // 1. Tìm trong sanphamData (Master catalog từ DS_SP - Nguồn chuẩn nhất)
+    for (const s of sanphamData) {
+      const realSkuCt = (s.sku_ct || s.sku_con || s.id_sp_ct || '').trim();
+      // SKU CT bắt buộc phải có độ dài > 5 ký tự (mã cha <= 5 ký tự)
+      if (!realSkuCt || realSkuCt.length <= 5) continue;
+
+      const ct = realSkuCt.toLowerCase();
+      const main = (s.sku || s.id_sp || '').toLowerCase();
+      const name = (s.ten_sp || s.ten || '').toLowerCase();
+      
+      if (ct.includes(q) || main.includes(q) || name.includes(q)) {
+        const key = realSkuCt.toUpperCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          const parentSku = (s.sku && s.sku.length <= 5)
+            ? s.sku
+            : (s.id_sp && s.id_sp.length <= 5)
+              ? s.id_sp
+              : (realSkuCt.includes('-') ? realSkuCt.split('-')[0] : realSkuCt.substring(0, 4));
+
+          allMatches.push({
+            sku_ct: realSkuCt,
+            sku: parentSku,
+            ten_sp: s.ten_sp || s.ten || ''
+          });
+        }
+      }
+    }
+
+    // 2. Tìm thêm trong udctData (Lịch sử đơn xuất gần nhất)
+    for (let i = udctData.length - 1; i >= 0; i--) {
+      const item = udctData[i];
+      const realSkuCt = (item.sku_ct || item.id_sp_ct || '').trim();
+      // SKU CT bắt buộc phải có độ dài > 5 ký tự
+      if (!realSkuCt || realSkuCt.length <= 5) continue;
+      
+      const key = realSkuCt.toUpperCase();
+      if (seen.has(key)) continue;
+
+      const ct = realSkuCt.toLowerCase();
+      const main = (item.id_sp || item.sku || item.sku_shop_up || '').toLowerCase();
+      const name = (item.ten_sp || '').toLowerCase();
+      
+      if (ct.includes(q) || main.includes(q) || name.includes(q)) {
+        seen.add(key);
+        // Ưu tiên lấy tên chuẩn và mã cha từ sanphamData nếu tồn tại
+        const sp = sanphamData.find(s => (s.sku_ct || s.sku_con || s.id_sp_ct || '').toUpperCase() === key);
+        const parentSku = (sp?.sku && sp.sku.length <= 5)
+          ? sp.sku
+          : (sp?.id_sp && sp.id_sp.length <= 5)
+            ? sp.id_sp
+            : (item.id_sp && item.id_sp.length <= 5)
+              ? item.id_sp
+              : (item.sku && item.sku.length <= 5)
+                ? item.sku
+                : (realSkuCt.includes('-') ? realSkuCt.split('-')[0] : realSkuCt.substring(0, 4));
+
+        allMatches.push({
+          sku_ct: realSkuCt,
+          sku: parentSku,
+          ten_sp: sp?.ten_sp || sp?.ten || item.ten_sp || ''
+        });
+      }
+    }
+
+    // Sắp xếp gợi ý theo thứ tự Z-A
+    allMatches.sort((a, b) => (b.sku_ct || '').localeCompare(a.sku_ct || ''));
+
+    return allMatches.slice(0, 30);
+  }, [sanphamData, udctData]);
+
+  const transferSkuCtToMaGian = (code) => {
+    const clean = (code || '').trim().toUpperCase();
+    if (!clean) return;
+    setMaGian(clean);
+    setSkuCt('');
+    setSku('');
+    setTenSp('');
+    setSkuCtSuggestions([]);
+    setDetectedMaGianInSkuCt('');
+    toast.info(`💡 Đã nhận diện Mã gian (${clean}), tự động chuyển vào ô Mã gian!`, { autoClose: 2000 });
+  };
+
+  const selectSkuCtFromMaGian = (item) => {
+    const chosenSkuCt = item.sku_ct || item.id_sp_ct || '';
+    setSkuCt(chosenSkuCt);
+    const chosenSku = (item.sku && item.sku.length <= 5)
+      ? item.sku
+      : (item.id_sp && item.id_sp.length <= 5)
+        ? item.id_sp
+        : (chosenSkuCt.includes('-') ? chosenSkuCt.split('-')[0] : chosenSkuCt.substring(0, 4));
+    if (chosenSku) {
+      setSku(chosenSku);
+    }
+    if (item.ten_sp) setTenSp(item.ten_sp);
+    setMaGian('');
+    setMaGianSuggestions([]);
+    setMaGianSkuCtSuggestions([]);
+    toast.info(`💡 Đã điền SKU CT: ${chosenSkuCt} (${chosenSku})`, { autoClose: 2000 });
+  };
+
   const handleMaGianInput = (val) => {
     setMaGian(val);
-    if (!val.trim()) {
+    const raw = (val || '').trim();
+
+    if (!raw) {
       setMaGianSuggestions(uniqueMaGianList.slice(0, 20));
+      setMaGianSkuCtSuggestions([]);
       return;
     }
-    const q = val.trim().toLowerCase();
+
+    // Yêu cầu: "ở ô mã gian tôi điền > 3 ký tự sẽ hiện gợi ý sku ct. ấn sẽ điền vào sku ct"
+    if (raw.length > 3) {
+      setMaGianSuggestions([]);
+      const matches = searchSkuCtMatches(raw);
+      setMaGianSkuCtSuggestions(matches);
+      return;
+    }
+
+    // Nếu gõ <= 3 ký tự: tìm kiếm danh sách Mã gian
+    setMaGianSkuCtSuggestions([]);
+    const q = raw.toLowerCase();
     const matches = uniqueMaGianList.filter(m => m.toLowerCase().includes(q));
     setMaGianSuggestions(matches.slice(0, 20));
+  };
+
+  const handleMaGianBlur = () => {
+    // Để trống để không ghi đè khi bấm vào gợi ý
   };
 
 
@@ -117,15 +246,15 @@ export default function HangHoanDrawer({
       if (field !== 'mdh' && match.mdh) setMdh(match.mdh);
       if (field === 'mdh' && match.mvd && !mvd2) setMvd2(match.mvd);
       
-      const skuCtVal = match.id_sp_ct || '';
-      let finalSku = skuCtVal ? skuCtVal.substring(0, 4) : (match.sku_shop_up || match.id_sp || '');
+      const skuCtVal = match.id_sp_ct || match.sku_ct || '';
+      let finalSku = match.id_sp || match.sku || (skuCtVal ? (skuCtVal.includes('-') ? skuCtVal.split('-')[0] : skuCtVal.substring(0, 4)) : '');
       let finalTenSp = match.ten_sp || '';
       
-      if (skuCtVal && (!finalSku || !finalTenSp)) {
+      if (skuCtVal && sanphamData.length) {
         const sp = sanphamData.find((s) => (s.sku_ct || s.id_sp_ct || s.sku_con || '').toLowerCase() === skuCtVal.toLowerCase());
         if (sp) {
-          if (!finalSku) finalSku = sp.sku || sp.id_sp || '';
-          if (!finalTenSp) finalTenSp = sp.ten_sp || sp.ten || '';
+          finalSku = sp.sku || sp.id_sp || finalSku;
+          finalTenSp = sp.ten_sp || sp.ten || finalTenSp;
         }
       }
       
@@ -140,11 +269,12 @@ export default function HangHoanDrawer({
     if (!skuCt) {
       setTenSp('');
     } else {
-      let sp = sanphamData.find(s => (s.sku_ct || s.id_sp_ct || s.sku_con || '').toLowerCase() === skuCt.toLowerCase());
+      const cleanCt = skuCt.trim().toLowerCase();
+      let sp = sanphamData.find(s => (s.sku_ct || s.id_sp_ct || s.sku_con || '').toLowerCase() === cleanCt);
       if (sp && (sp.ten_sp || sp.ten)) {
         setTenSp(sp.ten_sp || sp.ten);
       } else {
-        let u = udctData.find(u => (u.sku_ct || u.id_sp_ct || '').toLowerCase() === skuCt.toLowerCase() && u.ten_sp);
+        let u = udctData.find(u => (u.sku_ct || u.id_sp_ct || '').toLowerCase() === cleanCt && u.ten_sp);
         if (u) {
           setTenSp(u.ten_sp);
         }
@@ -154,6 +284,7 @@ export default function HangHoanDrawer({
 
   // Viewport keyboard sync ref
   const drawerRef = useRef(null);
+  const maGianRef = useRef(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -224,6 +355,22 @@ export default function HangHoanDrawer({
     };
   }, [isOpen]);
 
+  // Click outside to close Ma Gian suggestions
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (e) => {
+      if (maGianRef.current && !maGianRef.current.contains(e.target)) {
+        setMaGianSuggestions([]);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [isOpen]);
+
 
 
 
@@ -277,15 +424,15 @@ export default function HangHoanDrawer({
       if (item.ma_gian) setMaGian(item.ma_gian);
       if (targetField !== 'mdh' && item.mdh) setMdh(item.mdh);
       
-      const skuCtVal = item.id_sp_ct || '';
-      let finalSku = skuCtVal ? skuCtVal.substring(0, 4) : (item.sku_shop_up || item.id_sp || '');
+      const skuCtVal = item.id_sp_ct || item.sku_ct || '';
+      let finalSku = item.id_sp || item.sku || (skuCtVal ? (skuCtVal.includes('-') ? skuCtVal.split('-')[0] : skuCtVal.substring(0, 4)) : '');
       let finalTenSp = item.ten_sp || '';
       
-      if (skuCtVal && (!finalSku || !finalTenSp)) {
+      if (skuCtVal && sanphamData.length) {
         const sp = sanphamData.find((s) => (s.sku_ct || s.id_sp_ct || s.sku_con || '').toLowerCase() === skuCtVal.toLowerCase());
         if (sp) {
-          if (!finalSku) finalSku = sp.sku || sp.id_sp || '';
-          if (!finalTenSp) finalTenSp = sp.ten_sp || sp.ten || '';
+          finalSku = sp.sku || sp.id_sp || finalSku;
+          finalTenSp = sp.ten_sp || sp.ten || finalTenSp;
         }
       }
       
@@ -384,7 +531,8 @@ export default function HangHoanDrawer({
   const handleSkuCtInput = (val) => {
     setSkuCt(val);
     if (val) {
-      setSku(val.substring(0, 4));
+      const guessed = val.includes('-') ? val.split('-')[0] : (val.length <= 4 ? val : val.substring(0, 4));
+      setSku(guessed);
     } else {
       setSku('');
     }
@@ -392,75 +540,45 @@ export default function HangHoanDrawer({
     const q = val.trim().toLowerCase();
     if (!q) {
       setSkuCtSuggestions([]);
+      setDetectedMaGianInSkuCt('');
       return;
     }
 
-    const allMatches = [];
-    const seen = new Set();
-    
-    // Tìm trong udctData (lấy từ mới nhất)
-    for (let i = udctData.length - 1; i >= 0; i--) {
-      const item = udctData[i];
-      const realSkuCt = item.sku_ct || item.id_sp_ct || '';
-      
-      // Lấy ký tự > 5
-      if (realSkuCt.length <= 5) continue;
-      
-      const ct = realSkuCt.toLowerCase();
-      const main = (item.sku_shop_up || item.id_sp || '').toLowerCase();
-      const name = (item.ten_sp || '').toLowerCase();
-      
-      if (ct.includes(q) || main.includes(q) || name.includes(q)) {
-        if (!seen.has(realSkuCt)) {
-          seen.add(realSkuCt);
-          allMatches.push({
-            sku_ct: realSkuCt,
-            sku: item.id_sp || item.sku_shop_up,
-            ten_sp: item.ten_sp
-          });
-        }
+    // Kiểm tra nếu người dùng đang nhập Mã gian (3 ký tự không chứa '-') vào ô SKU CT
+    const foundGian = (q.length === 3 && !q.includes('-'))
+      ? uniqueMaGianList.find(m => m.toLowerCase() === q) || (/^[a-z0-9]{3}$/i.test(q) ? q.toUpperCase() : null)
+      : null;
+    setDetectedMaGianInSkuCt(foundGian || '');
+
+    const matches = searchSkuCtMatches(q);
+    setSkuCtSuggestions(matches);
+  };
+
+  const handleSkuCtBlur = () => {
+    const raw = (skuCt || '').trim();
+    // Mã gian có 3 ký tự (không có dấu -)
+    if (raw.length === 3 && !raw.includes('-')) {
+      const isGian = uniqueMaGianList.some(m => m.toLowerCase() === raw.toLowerCase()) || /^[A-Za-z0-9]{3}$/.test(raw);
+      if (isGian) {
+        transferSkuCtToMaGian(raw);
       }
     }
-
-    // Tìm trong sanphamData
-    for (const s of sanphamData) {
-      const realSkuCt = s.sku_ct || s.id_sp_ct || s.sku_con || '';
-      
-      // Lấy ký tự > 5
-      if (realSkuCt.length <= 5) continue;
-
-      const ct = realSkuCt.toLowerCase();
-      const main = (s.sku || s.id_sp || '').toLowerCase();
-      const name = (s.ten_sp || '').toLowerCase();
-      
-      if (ct.includes(q) || main.includes(q) || name.includes(q)) {
-        if (!seen.has(realSkuCt)) {
-          seen.add(realSkuCt);
-          allMatches.push({
-            sku_ct: realSkuCt,
-            sku: s.id_sp,
-            ten_sp: s.ten_sp || s.ten
-          });
-        }
-      }
-    }
-
-    // Sắp xếp Z-A
-    allMatches.sort((a, b) => (b.sku_ct || '').localeCompare(a.sku_ct || ''));
-
-    setSkuCtSuggestions(allMatches.slice(0, 15));
   };
 
   const selectSkuCt = (item) => {
     const chosenSkuCt = item.sku_ct || item.id_sp_ct || '';
     setSkuCt(chosenSkuCt);
-    if (chosenSkuCt) {
-      setSku(chosenSkuCt.substring(0, 4));
-    } else if (item.sku || item.id_sp) {
-      setSku(item.sku || item.id_sp);
+    const chosenSku = (item.sku && item.sku.length <= 5)
+      ? item.sku
+      : (item.id_sp && item.id_sp.length <= 5)
+        ? item.id_sp
+        : (chosenSkuCt.includes('-') ? chosenSkuCt.split('-')[0] : chosenSkuCt.substring(0, 4));
+    if (chosenSku) {
+      setSku(chosenSku);
     }
     if (item.ten_sp) setTenSp(item.ten_sp);
     setSkuCtSuggestions([]);
+    setDetectedMaGianInSkuCt('');
   };
 
   // Image Upload handler (Convert to base64 or upload to ImgBB)
@@ -504,6 +622,40 @@ export default function HangHoanDrawer({
       return;
     }
 
+    let finalMaGian = maGian.trim().toUpperCase();
+    let finalSkuCt = skuCt.trim().toUpperCase();
+    let finalSku = sku.trim().toUpperCase();
+    let finalTenSp = tenSp.trim();
+
+    // Tự động nhận diện và hoán đổi nếu điền nhầm giữa Mã gian và SKU CT:
+    // 1. Mã gian bị điền nhầm SKU CT (> 5 ký tự hoặc chứa '-')
+    if ((finalMaGian.length > 5 || finalMaGian.includes('-')) && (finalSkuCt.length <= 4 || !finalSkuCt)) {
+      const temp = finalMaGian;
+      finalMaGian = (finalSkuCt.length === 3 && !finalSkuCt.includes('-')) ? finalSkuCt : '';
+      finalSkuCt = temp;
+    }
+    // 2. SKU CT bị điền nhầm Mã gian (3 ký tự không chứa '-')
+    else if ((finalSkuCt.length === 3 && !finalSkuCt.includes('-')) && (!finalMaGian || finalMaGian.length > 5)) {
+      if (!finalMaGian) {
+        finalMaGian = finalSkuCt;
+        finalSkuCt = '';
+      }
+    }
+
+    // Đảm bảo nếu SKU CT có giá trị thì tự động bù mã cha và tên sản phẩm nếu còn thiếu
+    if (finalSkuCt) {
+      if (!finalSku) {
+        finalSku = finalSkuCt.includes('-') ? finalSkuCt.split('-')[0] : (finalSkuCt.length <= 5 ? finalSkuCt : finalSkuCt.substring(0, 4));
+      }
+      if (!finalTenSp) {
+        const sp = sanphamData.find(s => (s.sku_ct || s.sku_con || s.id_sp_ct || '').toUpperCase() === finalSkuCt);
+        if (sp) {
+          finalTenSp = sp.ten_sp || sp.ten || '';
+          if (sp.sku || sp.id_sp) finalSku = sp.sku || sp.id_sp;
+        }
+      }
+    }
+
     setSaving(true);
     try {
       const payload = {
@@ -512,11 +664,11 @@ export default function HangHoanDrawer({
         ngay_nhan: ngayNhan,
         mvd: mvd.trim(),
         mvd_2: mvd2.trim(),
-        ma_gian: maGian.trim(),
-        sku: sku.trim(),
-        sku_ct: skuCt.trim(),
+        ma_gian: finalMaGian,
+        sku: finalSku,
+        sku_ct: finalSkuCt,
         slg: slg,
-        ten_sp: tenSp.trim(),
+        ten_sp: finalTenSp,
         kho: kho,
         tinh_trang: tinhTrang.trim(),
         trang_thai: hoanTra,
@@ -635,70 +787,195 @@ export default function HangHoanDrawer({
             )}
 
                         {/* Mã gian */}
-            <div className="relative z-40">
+            <div ref={maGianRef} className="col-span-2 relative z-40">
               <input
                 type="text"
                 value={maGian}
                 onChange={(e) => handleMaGianInput(e.target.value)}
+                onBlur={handleMaGianBlur}
                 onFocus={(e) => handleMaGianInput(e.target.value)}
-                placeholder="Mã gian..."
+                placeholder="Mã gian (gõ > 3 ký tự để tìm SKU CT)..."
+                title="Mã gian (3 ký tự). Nếu gõ > 3 ký tự (VD: z068) sẽ hiện gợi ý SKU CT"
                 className="w-full pl-3 pr-8 py-2 border border-slate-200 rounded-lg text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500/20"
               />
-              {maGian && (
+              {(maGian || maGianSuggestions.length > 0 || maGianSkuCtSuggestions.length > 0) && (
                 <button
                   type="button"
-                  onClick={() => { handleMaGianInput(''); setMaGianSuggestions([]); }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                  onClick={() => { handleMaGianInput(''); setMaGianSuggestions([]); setMaGianSkuCtSuggestions([]); }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600 hover:bg-slate-100 p-1 rounded-md text-xs font-bold transition-colors"
+                  title={maGian ? "Xóa" : "Đóng gợi ý"}
                 >
                   ✕
                 </button>
               )}
-              {maGianSuggestions.length > 0 && (
-                <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto">
-                  {maGianSuggestions.map((item, i) => (
-                    <div
-                      key={i}
-                      onClick={() => { setMaGian(item); setMaGianSuggestions([]); }}
-                      className="p-2 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-0 text-xs font-medium text-slate-700"
-                    >
-                      {item}
-                    </div>
-                  ))}
+              {(maGianSuggestions.length > 0 || maGianSkuCtSuggestions.length > 0) && (
+                <div 
+                  className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-64 overflow-y-auto"
+                  onMouseDown={(e) => e.preventDefault()}
+                >
+                  {/* Trường hợp gõ > 3 ký tự: Hiện gợi ý SKU CT */}
+                  {maGianSkuCtSuggestions.length > 0 && (
+                    <>
+                      <div className="sticky top-0 bg-indigo-50 border-b border-indigo-200 px-3 py-1.5 flex items-center justify-between text-[11px] font-bold text-indigo-700 z-10">
+                        <span>Gợi ý SKU CT ({maGianSkuCtSuggestions.length}) ➔ Bấm để điền vào SKU CT</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMaGianSkuCtSuggestions([]);
+                          }}
+                          className="text-slate-400 hover:text-rose-600 hover:bg-slate-200 px-1.5 py-0.5 rounded text-xs font-bold transition-colors flex items-center gap-1"
+                          title="Đóng gợi ý"
+                        >
+                          <span>✕</span> Đóng
+                        </button>
+                      </div>
+                      {maGianSkuCtSuggestions.map((item, i) => (
+                        <div
+                          key={i}
+                          onClick={() => selectSkuCtFromMaGian(item)}
+                          className="p-2.5 hover:bg-indigo-50 cursor-pointer border-b border-slate-100 last:border-0 text-xs transition-colors"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-bold text-indigo-700">{item.sku_ct || item.id_sp_ct}</span>
+                            {item.sku && (
+                              <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-medium border border-indigo-200">
+                                Mã: {item.sku}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-600 truncate mt-0.5" title={item.ten_sp}>
+                            {item.ten_sp || 'Chưa có tên SP'}
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
+
+                  {/* Trường hợp gõ <= 3 ký tự: Hiện gợi ý Mã gian */}
+                  {maGianSuggestions.length > 0 && (
+                    <>
+                      <div className="sticky top-0 bg-slate-50 border-b border-slate-200 px-3 py-1 flex items-center justify-between text-[11px] font-bold text-slate-500 z-10">
+                        <span>Gợi ý mã gian ({maGianSuggestions.length})</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMaGianSuggestions([]);
+                          }}
+                          className="text-slate-400 hover:text-rose-600 hover:bg-slate-200 px-1.5 py-0.5 rounded text-xs font-bold transition-colors flex items-center gap-1"
+                          title="Đóng gợi ý"
+                        >
+                          <span>✕</span> Đóng
+                        </button>
+                      </div>
+                      {maGianSuggestions.map((item, i) => (
+                        <div
+                          key={i}
+                          onClick={() => { setMaGian(item); setMaGianSuggestions([]); setMaGianSkuCtSuggestions([]); }}
+                          className="p-2 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-0 text-xs font-medium text-slate-700"
+                        >
+                          {item}
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </div>
               )}
             </div>
 
             {/* SKU CT with Auto-suggestions */}
-            <div className="relative">
+            <div className="col-span-2 relative z-30">
               <input
                 type="text"
                 value={skuCt}
                 onChange={(e) => handleSkuCtInput(e.target.value)}
-                placeholder="SKU chi tiết (SKU CT)..."
+                onBlur={handleSkuCtBlur}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const raw = (skuCt || '').trim();
+                    if (raw.length === 3 && !raw.includes('-')) {
+                      e.preventDefault();
+                      transferSkuCtToMaGian(raw);
+                    }
+                  }
+                }}
+                onPaste={(e) => {
+                  const pasteText = e.clipboardData.getData('text').trim();
+                  if (pasteText.length === 3 && !pasteText.includes('-')) {
+                    e.preventDefault();
+                    transferSkuCtToMaGian(pasteText);
+                  }
+                }}
+                placeholder="SKU chi tiết (10 ký tự)..."
+                title="SKU Chi tiết (10 ký tự - VD: Z068-WH-00, 201B-NA-00...)"
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-bold text-indigo-700 outline-none focus:ring-2 focus:ring-blue-500/20 pr-8"
               />
-              {skuCt && (
+              {(skuCt || skuCtSuggestions.length > 0 || detectedMaGianInSkuCt) && (
                 <button
                   type="button"
-                  onClick={() => { handleSkuCtInput(""); }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                  onClick={() => { handleSkuCtInput(""); setSkuCtSuggestions([]); setDetectedMaGianInSkuCt(''); }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600 hover:bg-slate-100 p-1 rounded-md text-xs font-bold transition-colors"
+                  title="Xóa / Đóng gợi ý"
                 >
                   ✕
                 </button>
               )}
 
-              {skuCtSuggestions.length > 0 && (
-                <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto">
-                  {skuCtSuggestions.map((item, i) => (
+              {(skuCtSuggestions.length > 0 || detectedMaGianInSkuCt) && (
+                <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-64 overflow-y-auto">
+                  {detectedMaGianInSkuCt && (
                     <div
-                      key={i}
-                      onClick={() => selectSkuCt(item)}
-                      className="p-2 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-0 text-xs"
+                      onClick={() => transferSkuCtToMaGian(detectedMaGianInSkuCt)}
+                      className="p-2.5 bg-amber-50 hover:bg-amber-100 border-b border-amber-200 cursor-pointer flex items-center justify-between text-xs text-amber-800 transition-colors"
                     >
-                      <div className="font-bold text-indigo-700">{item.sku_ct || item.id_sp_ct}</div>
-                      <div className="text-[10px] text-slate-500 truncate">{item.ten_sp || item.sku}</div>
+                      <div className="flex items-center gap-1.5 font-bold">
+                        <span>🏢 Nhận diện Mã gian:</span>
+                        <span className="px-1.5 py-0.5 bg-amber-200 text-amber-900 rounded">{detectedMaGianInSkuCt}</span>
+                      </div>
+                      <span className="text-[11px] bg-amber-600 hover:bg-amber-700 text-white font-bold px-2 py-0.5 rounded shadow-xs">
+                        Chuyển sang Mã gian ➔
+                      </span>
                     </div>
-                  ))}
+                  )}
+
+                  {skuCtSuggestions.length > 0 && (
+                    <>
+                      <div className="sticky top-0 bg-slate-50 border-b border-slate-200 px-3 py-1.5 flex items-center justify-between text-[11px] font-bold text-slate-500 z-10">
+                        <span>Gợi ý SKU CT ({skuCtSuggestions.length})</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSkuCtSuggestions([]);
+                          }}
+                          className="text-slate-400 hover:text-rose-600 hover:bg-slate-200 px-1.5 py-0.5 rounded text-xs font-bold transition-colors flex items-center gap-1"
+                          title="Đóng gợi ý"
+                        >
+                          <span>✕</span> Đóng
+                        </button>
+                      </div>
+                      {skuCtSuggestions.map((item, i) => (
+                        <div
+                          key={i}
+                          onClick={() => selectSkuCt(item)}
+                          className="p-2.5 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-0 text-xs transition-colors"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-bold text-indigo-700">{item.sku_ct || item.id_sp_ct}</span>
+                            {item.sku && (
+                              <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium border border-slate-200">
+                                Mã: {item.sku}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-600 truncate mt-0.5" title={item.ten_sp}>
+                            {item.ten_sp || 'Chưa có tên SP'}
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </div>
               )}
             </div>

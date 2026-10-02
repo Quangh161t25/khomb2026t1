@@ -121,12 +121,26 @@ export default function HangHoanPage() {
     try {
       const spRows = await fetchSheetData(CONFIG.sanphamSheetName);
       if (spRows && spRows.length > 1) {
-        const parsedSp = spRows.slice(1).map((row) => ({
-          id_sp: (row[0] || '').toString().trim(),
-          sku_con: (row[1] || '').toString().trim(),
-          ten_sp: (row[2] || '').toString().trim(),
-          ten: (row[2] || '').toString().trim(),
-        }));
+        const parsedSp = spRows.slice(1).map((row) => {
+          const c0 = (row[0] || '').toString().trim();
+          const c1 = (row[1] || '').toString().trim();
+          // SKU CT luôn luôn có độ dài > 5, SKU Cha ngắn hơn (<= 5)
+          let skuCt = c0;
+          let skuCha = c1;
+          if (c0.length <= 5 && c1.length > 5) {
+            skuCt = c1;
+            skuCha = c0;
+          }
+          return {
+            sku_ct: skuCt,
+            sku_con: skuCt,
+            id_sp_ct: skuCt,
+            id_sp: skuCha,
+            sku: skuCha,
+            ten_sp: (row[2] || '').toString().trim(),
+            ten: (row[2] || '').toString().trim(),
+          };
+        });
         setSanphamData(parsedSp);
         return parsedSp;
       }
@@ -153,7 +167,9 @@ export default function HangHoanPage() {
           sku_shop_up: (row[13] || '').toString().trim(),
           so_luong: (row[14] || '').toString().trim(),
           id_sp: (row[15] || '').toString().trim(),
+          sku: (row[15] || '').toString().trim(),
           id_sp_ct: (row[16] || '').toString().trim(),
+          sku_ct: (row[16] || '').toString().trim(),
           ten_sp: (row[17] || '').toString().trim(),
           slg_xuat: (row[18] || '').toString().trim(),
         }));
@@ -525,16 +541,16 @@ export default function HangHoanPage() {
     const udctMatch = udctData.find((item) => (item.mvd || '').toString().trim() === mvd);
     let hoanTraVal = udctMatch ? 'Hoàn' : 'Trả';
     let maGian = udctMatch ? (udctMatch.ma_gian || '').toString().toUpperCase() : '';
-    let skuCt = udctMatch ? (udctMatch.id_sp_ct || '').toString().toUpperCase() : '';
-    let sku = udctMatch ? (udctMatch.id_sp || '').toString().toUpperCase() : '';
+    let skuCt = udctMatch ? (udctMatch.id_sp_ct || udctMatch.sku_ct || '').toString().toUpperCase() : '';
+    let sku = udctMatch ? (udctMatch.id_sp || udctMatch.sku || '').toString().toUpperCase() : '';
     let slg = udctMatch ? udctMatch.slg_xuat || '1' : '1';
     let tenSp = udctMatch ? udctMatch.ten_sp || '' : '';
     let mdh = udctMatch ? (udctMatch.mdh || '').toString().trim() : '';
 
     if (skuCt && sanphamData.length) {
-      const matchedSp = sanphamData.find((i) => (i.sku_con || '').toString().trim().toUpperCase() === skuCt);
+      const matchedSp = sanphamData.find((i) => (i.sku_ct || i.sku_con || i.id_sp_ct || '').toString().trim().toUpperCase() === skuCt);
       if (matchedSp) {
-        sku = matchedSp.id_sp || matchedSp.sku_con.substring(0, 4) || sku;
+        sku = matchedSp.sku || matchedSp.id_sp || sku;
         if (!tenSp) tenSp = matchedSp.ten_sp || matchedSp.ten || '';
       }
     }
