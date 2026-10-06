@@ -29,6 +29,7 @@ import {
   Percent,
   Send,
   Copy,
+  Clock,
 } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -75,6 +76,8 @@ export default function BaoCaoPage() {
   const [toDate, setToDate] = useState(todayStr);
   const [maGianFilter, setMaGianFilter] = useState('');
   const [trangThaiFilter, setTrangThaiFilter] = useState('');
+  const [skuFilter, setSkuFilter] = useState('');
+  const [hourlyMetric, setHourlyMetric] = useState('slg'); // 'slg' | 'don' | 'doanh_thu'
 
   // Table Sorting
   const [magianSort, setMagianSort] = useState({ key: 'doanh_thu', asc: false });
@@ -155,6 +158,17 @@ export default function BaoCaoPage() {
     return [...new Set(udctData.map((i) => i.trang_thai).filter(Boolean))].sort();
   }, [udctData]);
 
+  const skuList = useMemo(() => {
+    const set = new Set();
+    udctData.forEach((i) => {
+      const s = (i.id_sp_ct || i.id_sp || '').trim();
+      if (s) set.add(s);
+      if (i.id_sp && i.id_sp.trim()) set.add(i.id_sp.trim());
+      if (i.id_sp_ct && i.id_sp_ct.trim()) set.add(i.id_sp_ct.trim());
+    });
+    return Array.from(set).sort();
+  }, [udctData]);
+
   // Quick Date Selectors
   const setQuickDate = (type) => {
     if (type === 'today') {
@@ -179,6 +193,7 @@ export default function BaoCaoPage() {
     setToDate(today);
     setMaGianFilter('');
     setTrangThaiFilter('');
+    setSkuFilter('');
     loadData();
   };
 
@@ -190,9 +205,24 @@ export default function BaoCaoPage() {
       if (toDate && itemYMD > toDate) return false;
       if (maGianFilter && item.ma_gian !== maGianFilter) return false;
       if (trangThaiFilter && (item.trang_thai || '').toLowerCase() !== trangThaiFilter.toLowerCase()) return false;
+      if (skuFilter) {
+        const sf = skuFilter.trim().toLowerCase();
+        const itemSku = (item.id_sp_ct || item.id_sp || '').toLowerCase();
+        const idSp = (item.id_sp || '').toLowerCase();
+        const idSpCt = (item.id_sp_ct || '').toLowerCase();
+        const skuShop = (item.sku_shop_up || '').toLowerCase();
+        if (
+          !itemSku.includes(sf) &&
+          !idSp.includes(sf) &&
+          !idSpCt.includes(sf) &&
+          !skuShop.includes(sf)
+        ) {
+          return false;
+        }
+      }
       return true;
     });
-  }, [udctData, fromDate, toDate, maGianFilter, trangThaiFilter]);
+  }, [udctData, fromDate, toDate, maGianFilter, trangThaiFilter, skuFilter]);
 
   // KPI Computations
   const kpiData = useMemo(() => {
@@ -377,9 +407,12 @@ export default function BaoCaoPage() {
     if (trangThaiFilter) {
       text += `LỌC THEO TRẠNG THÁI: ${trangThaiFilter}\n`;
     }
+    if (skuFilter) {
+      text += `LỌC THEO MÃ SKU: ${skuFilter}\n`;
+    }
 
     return text;
-  }, [filteredData, fromDate, toDate, kpiData, sanStats, maGianFilter, trangThaiFilter]);
+  }, [filteredData, fromDate, toDate, kpiData, sanStats, maGianFilter, trangThaiFilter, skuFilter]);
 
   // Copy text report handler
   const handleCopyTextReport = async () => {
@@ -556,6 +589,204 @@ export default function BaoCaoPage() {
     []
   );
 
+  // Biểu đồ số lượng theo khung giờ (Mỗi khung giờ 1 cột theo ngày)
+  const hourlyChartComputed = useMemo(() => {
+    const dayMap = {};
+
+    filteredData.forEach((item, idx) => {
+      const rawDay = toYMD(item.ngay) || (item.ngay || '').toString().trim() || 'Chưa rõ';
+      const rawKhung = (item.khung_h || '').toString().trim() || 'Chưa rõ';
+
+      if (!dayMap[rawDay]) {
+        dayMap[rawDay] = {};
+      }
+      if (!dayMap[rawDay][rawKhung]) {
+        dayMap[rawDay][rawKhung] = {
+          slg_xuat: 0,
+          ordersSet: new Set(),
+          doanh_thu: 0,
+        };
+      }
+
+      const sl = item.slg_xuat || 0;
+      const dt = (item.don_gia_1 || 0) * sl;
+      const orderKey = (item.mvd || item.mdh || `item_${idx}`).trim();
+
+      dayMap[rawDay][rawKhung].slg_xuat += sl;
+      dayMap[rawDay][rawKhung].ordersSet.add(orderKey);
+      dayMap[rawDay][rawKhung].doanh_thu += dt;
+    });
+
+    const sortedDays = Object.keys(dayMap).sort();
+
+    const sortKhungFn = (a, b) => {
+      const numA = parseInt(a, 10);
+      const numB = parseInt(b, 10);
+      if (!isNaN(numA) && !isNaN(numB) && numA !== numB) {
+        return numA - numB;
+      }
+      return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+    };
+
+    const DAY_PALETTE = [
+      { bg: 'rgba(59, 130, 246, 0.85)', border: '#2563eb' },
+      { bg: 'rgba(99, 102, 241, 0.85)', border: '#4f46e5' },
+      { bg: 'rgba(16, 185, 129, 0.85)', border: '#059669' },
+      { bg: 'rgba(245, 158, 11, 0.85)', border: '#d97706' },
+      { bg: 'rgba(139, 92, 246, 0.85)', border: '#7c3aed' },
+      { bg: 'rgba(236, 72, 153, 0.85)', border: '#db2777' },
+      { bg: 'rgba(14, 165, 233, 0.85)', border: '#0284c7' },
+      { bg: 'rgba(244, 63, 94, 0.85)', border: '#e11d48' },
+    ];
+
+    const labels = [];
+    const values = [];
+    const bgColors = [];
+    const borderColors = [];
+    const pointsMeta = [];
+
+    sortedDays.forEach((day, dayIndex) => {
+      const khungMap = dayMap[day];
+      const sortedKhung = Object.keys(khungMap).sort(sortKhungFn);
+      const colorScheme = DAY_PALETTE[dayIndex % DAY_PALETTE.length];
+      const formattedDate = formatYmdToDmy(day) || day;
+      const shortDate = formattedDate.length >= 5 ? formattedDate.slice(0, 5) : formattedDate;
+
+      sortedKhung.forEach((khung) => {
+        const stats = khungMap[khung];
+        const soDon = stats.ordersSet.size;
+        let metricVal = 0;
+        if (hourlyMetric === 'slg') metricVal = stats.slg_xuat;
+        else if (hourlyMetric === 'don') metricVal = soDon;
+        else if (hourlyMetric === 'doanh_thu') metricVal = stats.doanh_thu;
+
+        labels.push(sortedDays.length > 1 ? [khung, shortDate] : khung);
+        values.push(metricVal);
+        bgColors.push(colorScheme.bg);
+        borderColors.push(colorScheme.border);
+
+        pointsMeta.push({
+          day,
+          formattedDate,
+          khung,
+          slg_xuat: stats.slg_xuat,
+          so_don: soDon,
+          doanh_thu: stats.doanh_thu,
+          val: metricVal,
+        });
+      });
+
+      // Khoảng cách giữa các ngày (Spacer) như hình vẽ minh họa
+      if (sortedDays.length > 1 && dayIndex < sortedDays.length - 1) {
+        labels.push(['', '']);
+        values.push(null);
+        bgColors.push('transparent');
+        borderColors.push('transparent');
+        pointsMeta.push(null);
+      }
+    });
+
+    return {
+      labels,
+      values,
+      bgColors,
+      borderColors,
+      pointsMeta,
+      totalKhung: pointsMeta.filter(Boolean).length,
+      daysCount: sortedDays.length,
+    };
+  }, [filteredData, hourlyMetric]);
+
+  const hourlyChartData = useMemo(() => {
+    let datasetLabel = 'SL xuất (sản phẩm)';
+    if (hourlyMetric === 'don') datasetLabel = 'Số đơn hàng';
+    if (hourlyMetric === 'doanh_thu') datasetLabel = 'Doanh thu (đ)';
+
+    return {
+      labels: hourlyChartComputed.labels,
+      datasets: [
+        {
+          label: datasetLabel,
+          data: hourlyChartComputed.values,
+          backgroundColor: hourlyChartComputed.bgColors,
+          borderColor: hourlyChartComputed.borderColors,
+          borderWidth: 1.5,
+          borderRadius: 4,
+          hoverBackgroundColor: hourlyChartComputed.bgColors.map((c) =>
+            typeof c === 'string' && c.startsWith('rgba') ? c.replace('0.85', '1') : c
+          ),
+          barPercentage: 0.85,
+          categoryPercentage: 0.9,
+        },
+      ],
+    };
+  }, [hourlyChartComputed, hourlyMetric]);
+
+  const hourlyChartOptions = useMemo(() => {
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(15, 23, 42, 0.9)',
+          padding: 12,
+          titleFont: { size: 12, weight: 'bold' },
+          bodyFont: { size: 12 },
+          filter: (tooltipItem) => tooltipItem.raw !== null,
+          callbacks: {
+            title: (items) => {
+              const idx = items[0]?.dataIndex;
+              const pt = hourlyChartComputed.pointsMeta[idx];
+              if (!pt) return '';
+              return `📅 ${pt.formattedDate} - ⏰ Khung ${pt.khung}`;
+            },
+            label: (context) => {
+              const idx = context.dataIndex;
+              const pt = hourlyChartComputed.pointsMeta[idx];
+              if (!pt || pt.val === null) return '';
+              return [
+                `📦 SL xuất: ${pt.slg_xuat.toLocaleString('vi-VN')} sản phẩm`,
+                `📑 Số đơn: ${pt.so_don.toLocaleString('vi-VN')} đơn`,
+                `💰 Doanh thu: ${pt.doanh_thu.toLocaleString('vi-VN')} đ`,
+              ];
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: {
+            font: { size: 11, weight: 'bold' },
+            color: '#475569',
+            maxRotation: 0,
+            minRotation: 0,
+          },
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: '#f1f5f9' },
+          title: {
+            display: true,
+            text:
+              hourlyMetric === 'slg'
+                ? 'Số lượng xuất (sản phẩm)'
+                : hourlyMetric === 'don'
+                ? 'Số lượng đơn hàng'
+                : 'Doanh thu (vnđ)',
+            color: '#475569',
+            font: { size: 11, weight: 'bold' },
+          },
+          ticks: {
+            callback: (val) => Number(val).toLocaleString('vi-VN'),
+            font: { size: 10 },
+          },
+        },
+      },
+    };
+  }, [hourlyChartComputed, hourlyMetric]);
+
   // Sorting for Chi tiết đơn hàng
   const sortedDetailList = useMemo(() => {
     const list = [...filteredData];
@@ -611,7 +842,7 @@ export default function BaoCaoPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [fromDate, toDate, maGianFilter, trangThaiFilter, detailSort]);
+  }, [fromDate, toDate, maGianFilter, trangThaiFilter, skuFilter, detailSort]);
 
   const paginatedDetailList = useMemo(() => {
     const start = (currentPage - 1) * PAGE_SIZE;
@@ -880,6 +1111,33 @@ export default function BaoCaoPage() {
               </option>
             ))}
           </select>
+
+          {/* Lọc SKU */}
+          <div className="relative">
+            <input
+              type="text"
+              list="baocaoSkuList"
+              value={skuFilter}
+              onChange={(e) => setSkuFilter(e.target.value)}
+              placeholder="Lọc SKU..."
+              className="w-32 sm:w-36 pl-2.5 pr-6 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-primary/20"
+            />
+            {skuFilter && (
+              <button
+                type="button"
+                onClick={() => setSkuFilter('')}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                title="Xóa lọc SKU"
+              >
+                ✕
+              </button>
+            )}
+            <datalist id="baocaoSkuList">
+              {skuList.map((sku) => (
+                <option key={sku} value={sku} />
+              ))}
+            </datalist>
+          </div>
         </div>
       </div>
 
@@ -963,6 +1221,95 @@ export default function BaoCaoPage() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Biểu đồ số lượng theo khung giờ (Mỗi khung giờ 1 cột theo ngày) */}
+      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-bold text-sm text-slate-800 flex items-center gap-2">
+                <span>Biểu đồ số lượng theo khung giờ</span>
+                <span className="text-[11px] font-normal text-slate-500">
+                  (Mỗi khung giờ 1 cột theo ngày)
+                </span>
+              </h3>
+              <div className="text-[11px] text-slate-500">
+                {hourlyChartComputed.daysCount > 0 ? (
+                  <span>
+                    {hourlyChartComputed.daysCount} ngày • {hourlyChartComputed.totalKhung} khung giờ
+                    {skuFilter ? ` • Đang lọc SKU: "${skuFilter}"` : ''}
+                  </span>
+                ) : (
+                  'Chưa có dữ liệu'
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Metric Selector Toggle */}
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => setHourlyMetric('slg')}
+              className={`px-2.5 py-1 rounded-md transition-all ${
+                hourlyMetric === 'slg'
+                  ? 'bg-white text-primary shadow-2xs font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Xem số lượng sản phẩm xuất theo từng khung giờ"
+            >
+              SL xuất (sp)
+            </button>
+            <button
+              type="button"
+              onClick={() => setHourlyMetric('don')}
+              className={`px-2.5 py-1 rounded-md transition-all ${
+                hourlyMetric === 'don'
+                  ? 'bg-white text-primary shadow-2xs font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Xem số lượng đơn hàng theo từng khung giờ"
+            >
+              Số đơn
+            </button>
+            <button
+              type="button"
+              onClick={() => setHourlyMetric('doanh_thu')}
+              className={`px-2.5 py-1 rounded-md transition-all ${
+                hourlyMetric === 'doanh_thu'
+                  ? 'bg-white text-primary shadow-2xs font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Xem doanh thu theo từng khung giờ"
+            >
+              Doanh thu
+            </button>
+          </div>
+        </div>
+
+        {hourlyChartComputed.totalKhung > 0 ? (
+          <div className="overflow-x-auto custom-scrollbar pb-1">
+            <div
+              style={{
+                minWidth:
+                  hourlyChartComputed.labels.length > 20
+                    ? `${hourlyChartComputed.labels.length * 36}px`
+                    : '100%',
+                height: '320px',
+              }}
+            >
+              <Bar data={hourlyChartData} options={hourlyChartOptions} />
+            </div>
+          </div>
+        ) : (
+          <div className="h-44 flex items-center justify-center text-slate-400 text-xs">
+            Không có dữ liệu khung giờ trong khoảng thời gian đã chọn
+          </div>
+        )}
       </div>
 
       {/* Tables: Store Breakdown & SKU Breakdown */}
