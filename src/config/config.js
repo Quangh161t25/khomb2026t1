@@ -10,6 +10,9 @@ export const CONFIG = {
   banDonSheetName: "BAN_DON",
   hhShopDienSheetName: "HH_SHOP_DIEN",
   imgbbApiKey: "1bad1429a242d7040fda3f2cfddb3a25",
+  catboxUserHash: "457cab18a14302fef9eba0e24",
+  telegramBotToken: "8192862731:AAGitIiHpAX-4haL8Xw79WanvVa7nYc2UDI",
+  telegramChatId: "-1004258626019",
   serviceAccountEmail: "test-gia-ason@api-test-sheet-161.iam.gserviceaccount.com",
   privateKey: `-----BEGIN PRIVATE KEY-----
 MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC3NN84hLTkQPZd

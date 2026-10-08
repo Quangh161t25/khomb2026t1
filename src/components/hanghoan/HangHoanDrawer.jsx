@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { getTodayYmd, shiftDate, formatYmdToDmy, toYMD } from '../../utils/dateUtils';
 import { CONFIG } from '../../config/config';
+import { uploadImage } from '../../services/imageUploadService';
 
 export default function HangHoanDrawer({
   isOpen,
@@ -47,6 +48,7 @@ export default function HangHoanDrawer({
   const [anh1, setAnh1] = useState('');
   const [anh2, setAnh2] = useState('');
   const [anh3, setAnh3] = useState('');
+  const [uploadingSlots, setUploadingSlots] = useState({ 1: false, 2: false, 3: false });
   const [historyText, setHistoryText] = useState('');
   const [saving, setSaving] = useState(false);
   const [duplicateMvdNotice, setDuplicateMvdNotice] = useState('');
@@ -581,42 +583,44 @@ export default function HangHoanDrawer({
     setDetectedMaGianInSkuCt('');
   };
 
-  // Image Upload handler (Convert to base64 or upload to ImgBB)
+  // Image Upload handler (Nén ảnh client + tải lên Telegram / Catbox)
   const handleImageUpload = async (e, slot) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Direct Base64 preview or ImgBB upload
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const base64Data = event.target.result;
-      if (slot === 1) setAnh1(base64Data);
-      if (slot === 2) setAnh2(base64Data);
-      if (slot === 3) setAnh3(base64Data);
+    // Reset giá trị input để có thể chọn lại file cùng tên nếu muốn
+    e.target.value = '';
 
-      // Attempt ImgBB upload in background for permanent link
-      try {
-        const formData = new FormData();
-        formData.append('image', file);
-        const res = await fetch(
-          `https://api.imgbb.com/1/upload?key=${CONFIG.imgbbApiKey}`,
-          { method: 'POST', body: formData }
-        );
-        const json = await res.json();
-        if (json?.data?.url) {
-          if (slot === 1) setAnh1(json.data.url);
-          if (slot === 2) setAnh2(json.data.url);
-          if (slot === 3) setAnh3(json.data.url);
-        }
-      } catch (err) {
-        console.warn('ImgBB upload error, using local data:', err);
+    // Tạo preview ngay lập tức trên giao diện để người dùng không phải chờ
+    const localPreview = URL.createObjectURL(file);
+    if (slot === 1) setAnh1(localPreview);
+    if (slot === 2) setAnh2(localPreview);
+    if (slot === 3) setAnh3(localPreview);
+
+    setUploadingSlots((prev) => ({ ...prev, [slot]: true }));
+
+    try {
+      const caption = `Hàng hoàn | MVD: ${mvd || 'Chưa rõ'} | Gian: ${maGian || 'Chưa rõ'} | SKU: ${skuCt || sku || 'Chưa rõ'}`;
+      const cloudUrl = await uploadImage(file, { caption });
+      if (cloudUrl) {
+        if (slot === 1) setAnh1(cloudUrl);
+        if (slot === 2) setAnh2(cloudUrl);
+        if (slot === 3) setAnh3(cloudUrl);
       }
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Lỗi tải ảnh:', err);
+      toast.warning('Tải ảnh cloud gặp sự cố, tạm lưu ảnh nén.');
+    } finally {
+      setUploadingSlots((prev) => ({ ...prev, [slot]: false }));
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (uploadingSlots[1] || uploadingSlots[2] || uploadingSlots[3]) {
+      toast.warning('Ảnh đang được tải lên, vui lòng chờ trong giây lát...');
+      return;
+    }
     if (!mvd.trim()) {
       toast.warning('Vui lòng nhập Mã vận đơn (MVD)');
       return;
@@ -1195,23 +1199,37 @@ export default function HangHoanDrawer({
                     {val ? (
                       <div className="relative w-full h-full group rounded-lg overflow-hidden border border-slate-300">
                         <img src={val} alt={`Ảnh ${slot}`} className="w-full h-full object-cover" />
+                        {uploadingSlots[slot] && (
+                          <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center text-white text-[10px] font-bold gap-1 z-5">
+                            <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
+                            <span>Đang tải...</span>
+                          </div>
+                        )}
                         <button
                           type="button"
                           onClick={() => setter('')}
-                          className="absolute top-1 right-1 bg-rose-600 text-white p-1 rounded-full shadow-md hover:bg-rose-700 transition-colors"
+                          className="absolute top-1 right-1 bg-rose-600 text-white p-1 rounded-full shadow-md hover:bg-rose-700 transition-colors z-10"
                           title="Xóa ảnh"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     ) : (
-                      <label className="w-full h-full flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-lg bg-slate-50 hover:bg-blue-50 hover:border-blue-300 transition-colors cursor-pointer p-2 text-center">
-                        <Camera className="w-5 h-5 text-slate-400" />
-                        <span className="text-[9px] font-bold text-slate-400 mt-1">Ảnh {slot}</span>
+                      <label className="w-full h-full flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-lg bg-slate-50 hover:bg-blue-50 hover:border-blue-300 transition-colors cursor-pointer p-2 text-center relative">
+                        {uploadingSlots[slot] ? (
+                          <div className="flex flex-col items-center justify-center gap-1">
+                            <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                            <span className="text-[9px] font-bold text-slate-500">Đang tải...</span>
+                          </div>
+                        ) : (
+                          <>
+                            <Camera className="w-5 h-5 text-slate-400" />
+                            <span className="text-[9px] font-bold text-slate-400 mt-1">Ảnh {slot}</span>
+                          </>
+                        )}
                         <input
                           type="file"
                           accept="image/*"
-                          capture="environment"
                           onChange={(e) => handleImageUpload(e, slot)}
                           className="hidden"
                         />
