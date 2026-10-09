@@ -4,6 +4,7 @@ import { useToast } from '../../context/ToastContext';
 import {
   X,
   Camera,
+  FolderOpen,
   Copy,
   Trash2,
   Image as ImageIcon,
@@ -14,6 +15,7 @@ import {
 import { getTodayYmd, shiftDate, formatYmdToDmy, toYMD } from '../../utils/dateUtils';
 import { CONFIG } from '../../config/config';
 import { uploadImage } from '../../services/imageUploadService';
+import CameraCaptureModal from '../common/CameraCaptureModal';
 
 export default function HangHoanDrawer({
   isOpen,
@@ -27,6 +29,7 @@ export default function HangHoanDrawer({
   udctData = [],
   hangHoanData = [],
   onOpenQrScan,
+  onOpenImagePreview,
 }) {
   const { currentUser } = useAuth();
   const toast = useToast();
@@ -52,6 +55,45 @@ export default function HangHoanDrawer({
   const [historyText, setHistoryText] = useState('');
   const [saving, setSaving] = useState(false);
   const [duplicateMvdNotice, setDuplicateMvdNotice] = useState('');
+  const [cameraModalSlot, setCameraModalSlot] = useState(null);
+
+  // Refs cho các input chụp ảnh và chọn file của từng slot
+  const cameraInputRef1 = useRef(null);
+  const cameraInputRef2 = useRef(null);
+  const cameraInputRef3 = useRef(null);
+  const fileInputRef1 = useRef(null);
+  const fileInputRef2 = useRef(null);
+  const fileInputRef3 = useRef(null);
+
+  const cameraInputRefs = useMemo(() => ({
+    1: cameraInputRef1,
+    2: cameraInputRef2,
+    3: cameraInputRef3,
+  }), []);
+
+  const fileInputRefs = useMemo(() => ({
+    1: fileInputRef1,
+    2: fileInputRef2,
+    3: fileInputRef3,
+  }), []);
+
+  // Kích hoạt camera: trên mobile tự mở camera native, trên desktop mở webcam modal
+  const handleTriggerCamera = (slot) => {
+    const isMobile =
+      /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+      (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
+
+    if (isMobile) {
+      cameraInputRefs[slot]?.current?.click();
+    } else {
+      setCameraModalSlot(slot);
+    }
+  };
+
+  // Kích hoạt chọn từ tệp / thư viện ảnh
+  const handleTriggerFile = (slot) => {
+    fileInputRefs[slot]?.current?.click();
+  };
 
   // Suggestions state
   const [skuCtSuggestions, setSkuCtSuggestions] = useState([]);
@@ -584,12 +626,19 @@ export default function HangHoanDrawer({
   };
 
   // Image Upload handler (Nén ảnh client + tải lên Telegram / Catbox)
-  const handleImageUpload = async (e, slot) => {
-    const file = e.target.files?.[0];
+  const handleImageUpload = async (eOrFile, slot) => {
+    let file = null;
+    if (eOrFile instanceof File || eOrFile instanceof Blob) {
+      file = eOrFile;
+    } else if (eOrFile?.target?.files?.[0]) {
+      file = eOrFile.target.files[0];
+      eOrFile.target.value = '';
+    }
     if (!file) return;
 
-    // Reset giá trị input để có thể chọn lại file cùng tên nếu muốn
-    e.target.value = '';
+    // Reset input refs nếu có
+    if (cameraInputRefs[slot]?.current) cameraInputRefs[slot].current.value = '';
+    if (fileInputRefs[slot]?.current) fileInputRefs[slot].current.value = '';
 
     // Tạo preview ngay lập tức trên giao diện để người dùng không phải chờ
     const localPreview = URL.createObjectURL(file);
@@ -1186,58 +1235,144 @@ export default function HangHoanDrawer({
 
 
             
-                        {/* 3 Real Photos Upload */}
-            <div className="col-span-2 space-y-1.5 pt-1">
-              <div className="text-[10px] font-bold text-slate-400 uppercase">Ảnh thực tế (Tối đa 3 ảnh)</div>
+            {/* 3 Real Photos Upload */}
+            <div className="col-span-2 space-y-2 pt-1">
+              <div className="flex items-center justify-between">
+                <div className="text-[10.5px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <Camera className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>Ảnh thực tế (Tối đa 3 ảnh)</span>
+                </div>
+                <span className="text-[10px] text-slate-400">Chụp camera hoặc chọn từ tệp</span>
+              </div>
+
               <div className="grid grid-cols-3 gap-2">
                 {[
                   { slot: 1, val: anh1, setter: setAnh1 },
                   { slot: 2, val: anh2, setter: setAnh2 },
                   { slot: 3, val: anh3, setter: setAnh3 },
                 ].map(({ slot, val, setter }) => (
-                  <div key={slot} className="relative aspect-square">
+                  <div key={slot} className="relative aspect-4/5 sm:aspect-square flex flex-col">
                     {val ? (
-                      <div className="relative w-full h-full group rounded-lg overflow-hidden border border-slate-300">
-                        <img src={val} alt={`Ảnh ${slot}`} className="w-full h-full object-cover" />
+                      <div className="relative w-full h-full group rounded-xl overflow-hidden border border-slate-300/80 shadow-2xs bg-slate-900">
+                        <img
+                          src={val}
+                          alt={`Ảnh ${slot}`}
+                          onClick={() => onOpenImagePreview && onOpenImagePreview(val)}
+                          className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                          title="Bấm để xem ảnh phóng to"
+                        />
                         {uploadingSlots[slot] && (
-                          <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center text-white text-[10px] font-bold gap-1 z-5">
-                            <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
+                          <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center text-white text-[10px] font-bold gap-1 z-10 backdrop-blur-2xs">
+                            <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
                             <span>Đang tải...</span>
                           </div>
                         )}
+
+                        {/* Badge Tên Ảnh */}
+                        <div className="absolute top-1 left-1 bg-black/60 text-white text-[9px] font-bold px-1.5 py-0.5 rounded backdrop-blur-xs pointer-events-none">
+                          Ảnh {slot}
+                        </div>
+
+                        {/* Nút Xóa ảnh */}
                         <button
                           type="button"
                           onClick={() => setter('')}
-                          className="absolute top-1 right-1 bg-rose-600 text-white p-1 rounded-full shadow-md hover:bg-rose-700 transition-colors z-10"
-                          title="Xóa ảnh"
+                          className="absolute top-1 right-1 bg-rose-600 hover:bg-rose-700 text-white p-1 rounded-full shadow-md transition-colors z-10 cursor-pointer"
+                          title="Xóa ảnh này"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
+
+                        {/* Thanh tác vụ chụp lại / đổi file dưới ảnh */}
+                        <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/85 via-black/50 to-transparent p-1 flex items-center justify-center gap-1 z-10 opacity-90 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                          <button
+                            type="button"
+                            onClick={() => handleTriggerCamera(slot)}
+                            className="px-1.5 py-0.5 rounded bg-white/20 hover:bg-white/40 text-white text-[9px] font-bold flex items-center gap-0.5 backdrop-blur-xs cursor-pointer"
+                            title="Tự chụp lại ảnh mới"
+                          >
+                            <Camera className="w-3 h-3" />
+                            <span>Chụp lại</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleTriggerFile(slot)}
+                            className="px-1.5 py-0.5 rounded bg-white/20 hover:bg-white/40 text-white text-[9px] font-bold flex items-center gap-0.5 backdrop-blur-xs cursor-pointer"
+                            title="Chọn file khác"
+                          >
+                            <FolderOpen className="w-3 h-3" />
+                            <span>Đổi file</span>
+                          </button>
+                        </div>
                       </div>
                     ) : (
-                      <label className="w-full h-full flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-lg bg-slate-50 hover:bg-blue-50 hover:border-blue-300 transition-colors cursor-pointer p-2 text-center relative">
+                      <div className="w-full h-full flex flex-col justify-between border-2 border-dashed border-slate-300 hover:border-indigo-400 rounded-xl bg-slate-50/80 hover:bg-indigo-50/20 p-2 transition-all shadow-2xs">
                         {uploadingSlots[slot] ? (
-                          <div className="flex flex-col items-center justify-center gap-1">
-                            <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                            <span className="text-[9px] font-bold text-slate-500">Đang tải...</span>
+                          <div className="flex-1 flex flex-col items-center justify-center gap-1.5 py-4">
+                            <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
+                            <span className="text-[9px] font-bold text-indigo-600">Đang tải...</span>
                           </div>
                         ) : (
                           <>
-                            <Camera className="w-5 h-5 text-slate-400" />
-                            <span className="text-[9px] font-bold text-slate-400 mt-1">Ảnh {slot}</span>
+                            {/* Tiêu đề slot */}
+                            <div className="flex items-center justify-between pb-1">
+                              <span className="text-[10px] font-bold text-slate-700 flex items-center gap-1">
+                                <ImageIcon className="w-3 h-3 text-slate-400" />
+                                Ảnh {slot}
+                              </span>
+                              <span className="text-[8.5px] font-medium text-slate-400 bg-slate-200/60 px-1 py-0.2 rounded">Trống</span>
+                            </div>
+
+                            {/* 2 Nút bấm riêng biệt: Chụp ảnh & Chọn file */}
+                            <div className="flex flex-col gap-1 mt-auto">
+                              <button
+                                type="button"
+                                onClick={() => handleTriggerCamera(slot)}
+                                className="w-full py-1.5 px-1 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 shadow-2xs transition-all cursor-pointer"
+                                title="Chụp ảnh trực tiếp từ camera"
+                              >
+                                <Camera className="w-3.5 h-3.5 shrink-0" />
+                                <span>Chụp ảnh</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleTriggerFile(slot)}
+                                className="w-full py-1.5 px-1 bg-white hover:bg-slate-100 active:scale-95 text-slate-700 border border-slate-200 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 shadow-2xs transition-all cursor-pointer"
+                                title="Chọn ảnh có sẵn từ tệp / thư viện máy"
+                              >
+                                <FolderOpen className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                                <span>Chọn file</span>
+                              </button>
+                            </div>
                           </>
                         )}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => handleImageUpload(e, slot)}
-                          className="hidden"
-                        />
-                      </label>
+                      </div>
                     )}
                   </div>
                 ))}
               </div>
+
+              {/* Hidden Inputs cho 3 slots (1 input cho camera native, 1 input cho file thư viện) */}
+              {[1, 2, 3].map((slot) => (
+                <React.Fragment key={slot}>
+                  <input
+                    ref={cameraInputRefs[slot]}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={(e) => handleImageUpload(e, slot)}
+                    className="hidden"
+                  />
+                  <input
+                    ref={fileInputRefs[slot]}
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleImageUpload(e, slot)}
+                    className="hidden"
+                  />
+                </React.Fragment>
+              ))}
             </div>
 
             {/* History text */}
@@ -1292,6 +1427,18 @@ export default function HangHoanDrawer({
           </button>
         </div>
       </div>
+
+      {/* Modal chụp ảnh từ Webcam máy tính */}
+      <CameraCaptureModal
+        isOpen={cameraModalSlot !== null}
+        onClose={() => setCameraModalSlot(null)}
+        onCapture={(file) => {
+          if (cameraModalSlot) {
+            handleImageUpload(file, cameraModalSlot);
+          }
+        }}
+        title={`Chụp ảnh thực tế - Ảnh ${cameraModalSlot || ''}`}
+      />
     </>
   );
 }
