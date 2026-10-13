@@ -1243,22 +1243,16 @@ export default function HangHoanDrawer({
                     disabled={!mvd2?.trim()}
                     onClick={handleCopyMvd2}
                     title="Sao chép MVD 2"
-                    className={`px-2.5 py-2 border rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                    className={`px-2.5 py-2 border rounded-lg text-xs font-bold flex items-center justify-center shrink-0 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
                       copiedMvd2
                         ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
                         : 'bg-slate-50 border-slate-300 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 text-slate-700'
                     }`}
                   >
                     {copiedMvd2 ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>Đã chép</span>
-                      </>
+                      <Check className="w-4 h-4 text-emerald-600" />
                     ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5 text-blue-600" />
-                        <span>Chép</span>
-                      </>
+                      <Copy className="w-4 h-4 text-blue-600" />
                     )}
                   </button>
                   <button
