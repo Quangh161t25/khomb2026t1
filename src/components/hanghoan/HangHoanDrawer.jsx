@@ -97,6 +97,7 @@ export default function HangHoanDrawer({
 
   // Suggestions state
   const [skuCtSuggestions, setSkuCtSuggestions] = useState([]);
+  const [skuCtFirstChar, setSkuCtFirstChar] = useState('');
   const [mvdSuggestions, setMvdSuggestions] = useState([]);
   const [mvd2Suggestions, setMvd2Suggestions] = useState([]);
   const [mdhSuggestions, setMdhSuggestions] = useState([]);
@@ -108,10 +109,11 @@ export default function HangHoanDrawer({
     return [...new Set(udctData.map(i => (i.ma_gian || '').trim()).filter(Boolean))].sort();
   }, [udctData]);
 
-  // Hàm tìm kiếm gợi ý SKU CT dùng chung cho cả ô SKU CT và ô Mã gian
-  const searchSkuCtMatches = useCallback((query) => {
+  // Hàm tìm kiếm gợi ý SKU CT dùng chung cho cả ô SKU CT và ô Mã gian (Hỗ trợ lọc lớp 2 theo ký tự đầu)
+  const searchSkuCtMatches = useCallback((query, firstChar = '') => {
     const q = (query || '').trim().toLowerCase();
-    if (!q) return [];
+    const prefix = (firstChar || '').trim().toLowerCase();
+    if (!q && !prefix) return [];
 
     const allMatches = [];
     const seen = new Set();
@@ -125,8 +127,14 @@ export default function HangHoanDrawer({
       const ct = realSkuCt.toLowerCase();
       const main = (s.sku || s.id_sp || '').toLowerCase();
       const name = (s.ten_sp || s.ten || '').toLowerCase();
+
+      // Lọc lớp 2: Nếu có điền ký tự đầu tiên, bắt buộc SKU CT phải bắt đầu bằng ký tự đó
+      if (prefix && !ct.startsWith(prefix)) continue;
+
+      // Lọc lớp 1: Nếu có từ khóa tìm kiếm, phải khớp mã hoặc tên SP
+      const matchQuery = !q || ct.includes(q) || main.includes(q) || name.includes(q);
       
-      if (ct.includes(q) || main.includes(q) || name.includes(q)) {
+      if (matchQuery) {
         const key = realSkuCt.toUpperCase();
         if (!seen.has(key)) {
           seen.add(key);
@@ -158,8 +166,14 @@ export default function HangHoanDrawer({
       const ct = realSkuCt.toLowerCase();
       const main = (item.id_sp || item.sku || item.sku_shop_up || '').toLowerCase();
       const name = (item.ten_sp || '').toLowerCase();
+
+      // Lọc lớp 2: Nếu có điền ký tự đầu tiên, bắt buộc SKU CT phải bắt đầu bằng ký tự đó
+      if (prefix && !ct.startsWith(prefix)) continue;
+
+      // Lọc lớp 1: Nếu có từ khóa tìm kiếm, phải khớp mã hoặc tên SP
+      const matchQuery = !q || ct.includes(q) || main.includes(q) || name.includes(q);
       
-      if (ct.includes(q) || main.includes(q) || name.includes(q)) {
+      if (matchQuery) {
         seen.add(key);
         // Ưu tiên lấy tên chuẩn và mã cha từ sanphamData nếu tồn tại
         const sp = sanphamData.find(s => (s.sku_ct || s.sku_con || s.id_sp_ct || '').toUpperCase() === key);
@@ -196,6 +210,7 @@ export default function HangHoanDrawer({
     setTenSp('');
     setSkuCtSuggestions([]);
     setDetectedMaGianInSkuCt('');
+    setSkuCtFirstChar('');
     toast.info(`💡 Đã nhận diện Mã gian (${clean}), tự động chuyển vào ô Mã gian!`, { autoClose: 2000 });
   };
 
@@ -214,6 +229,8 @@ export default function HangHoanDrawer({
     setMaGian('');
     setMaGianSuggestions([]);
     setMaGianSkuCtSuggestions([]);
+    setSkuCtSuggestions([]);
+    setSkuCtFirstChar('');
     toast.info(`💡 Đã điền SKU CT: ${chosenSkuCt} (${chosenSku})`, { autoClose: 2000 });
   };
 
@@ -230,7 +247,7 @@ export default function HangHoanDrawer({
     // Yêu cầu: "ở ô mã gian tôi điền > 3 ký tự sẽ hiện gợi ý sku ct. ấn sẽ điền vào sku ct"
     if (raw.length > 3) {
       setMaGianSuggestions([]);
-      const matches = searchSkuCtMatches(raw);
+      const matches = searchSkuCtMatches(raw, skuCtFirstChar);
       setMaGianSkuCtSuggestions(matches);
       return;
     }
@@ -329,6 +346,7 @@ export default function HangHoanDrawer({
   // Viewport keyboard sync ref
   const drawerRef = useRef(null);
   const maGianRef = useRef(null);
+  const skuCtRowRef = useRef(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -371,6 +389,7 @@ export default function HangHoanDrawer({
 
       setDuplicateMvdNotice('');
       setSkuCtSuggestions([]);
+      setSkuCtFirstChar('');
       setMvdSuggestions([]);
       setMvd2Suggestions([]);
       setMdhSuggestions([]);
@@ -582,7 +601,8 @@ export default function HangHoanDrawer({
     }
 
     const q = val.trim().toLowerCase();
-    if (!q) {
+    const prefix = (skuCtFirstChar || '').trim().toLowerCase();
+    if (!q && !prefix) {
       setSkuCtSuggestions([]);
       setDetectedMaGianInSkuCt('');
       return;
@@ -594,11 +614,47 @@ export default function HangHoanDrawer({
       : null;
     setDetectedMaGianInSkuCt(foundGian || '');
 
-    const matches = searchSkuCtMatches(q);
+    const matches = searchSkuCtMatches(q, skuCtFirstChar);
     setSkuCtSuggestions(matches);
   };
 
-  const handleSkuCtBlur = () => {
+  // Xử lý khi điền ký tự đầu tiên để lọc lớp 2 cho SKU CT
+  const handleSkuCtFirstCharInput = (val) => {
+    const clean = val.trim().toUpperCase();
+    setSkuCtFirstChar(clean);
+
+    const rawMaGian = (maGian || '').trim();
+    const rawSkuCt = (skuCt || '').trim();
+
+    // Nếu đang mở tìm SKU CT từ ô Mã gian (> 3 ký tự), lọc lớp 2 luôn cho danh sách đó
+    if (rawMaGian.length > 3) {
+      setMaGianSkuCtSuggestions(searchSkuCtMatches(rawMaGian, clean));
+      if (!rawSkuCt) {
+        return;
+      }
+    }
+
+    if (!rawSkuCt && !clean) {
+      setSkuCtSuggestions([]);
+      return;
+    }
+
+    let matches = searchSkuCtMatches(rawSkuCt, clean);
+    // Nếu ô SKU CT đang chứa 1 mã đầy đủ cũ (VD: Z069-MT-00) và người dùng gõ ký tự đầu khác, tìm theo ký tự đầu mới
+    if (matches.length === 0 && clean && rawSkuCt.length >= 8 && rawSkuCt.includes('-')) {
+      matches = searchSkuCtMatches('', clean);
+    }
+    setSkuCtSuggestions(matches);
+  };
+
+  const handleSkuCtBlur = (e) => {
+    // Nếu đang bấm sang ô lọc ký tự đầu hoặc danh sách gợi ý trong cùng cụm SKU CT thì không tự chuyển Mã gian
+    if (skuCtRowRef.current && e?.relatedTarget && skuCtRowRef.current.contains(e.relatedTarget)) {
+      return;
+    }
+    if ((skuCtFirstChar || '').trim()) {
+      return;
+    }
     const raw = (skuCt || '').trim();
     // Mã gian có 3 ký tự (không có dấu -)
     if (raw.length === 3 && !raw.includes('-')) {
@@ -623,6 +679,7 @@ export default function HangHoanDrawer({
     if (item.ten_sp) setTenSp(item.ten_sp);
     setSkuCtSuggestions([]);
     setDetectedMaGianInSkuCt('');
+    setSkuCtFirstChar('');
   };
 
   // Image Upload handler (Nén ảnh client + tải lên Telegram / Catbox)
@@ -870,7 +927,14 @@ export default function HangHoanDrawer({
                   {maGianSkuCtSuggestions.length > 0 && (
                     <>
                       <div className="sticky top-0 bg-indigo-50 border-b border-indigo-200 px-3 py-1.5 flex items-center justify-between text-[11px] font-bold text-indigo-700 z-10">
-                        <span>Gợi ý SKU CT ({maGianSkuCtSuggestions.length}) ➔ Bấm để điền vào SKU CT</span>
+                        <span className="flex items-center gap-1.5 flex-wrap">
+                          <span>Gợi ý SKU CT ({maGianSkuCtSuggestions.length}) ➔ Bấm để điền vào SKU CT</span>
+                          {skuCtFirstChar && (
+                            <span className="px-1.5 py-0.5 bg-indigo-600 text-white rounded text-[10px]">
+                              Ký tự đầu: {skuCtFirstChar}
+                            </span>
+                          )}
+                        </span>
                         <button
                           type="button"
                           onClick={(e) => {
@@ -937,43 +1001,92 @@ export default function HangHoanDrawer({
               )}
             </div>
 
-            {/* SKU CT with Auto-suggestions */}
-            <div className="col-span-2 relative z-30">
-              <input
-                type="text"
-                value={skuCt}
-                onChange={(e) => handleSkuCtInput(e.target.value)}
-                onBlur={handleSkuCtBlur}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const raw = (skuCt || '').trim();
-                    if (raw.length === 3 && !raw.includes('-')) {
-                      e.preventDefault();
-                      transferSkuCtToMaGian(raw);
-                    }
-                  }
-                }}
-                onPaste={(e) => {
-                  const pasteText = e.clipboardData.getData('text').trim();
-                  if (pasteText.length === 3 && !pasteText.includes('-')) {
-                    e.preventDefault();
-                    transferSkuCtToMaGian(pasteText);
-                  }
-                }}
-                placeholder="SKU chi tiết (10 ký tự)..."
-                title="SKU Chi tiết (10 ký tự - VD: Z068-WH-00, 201B-NA-00...)"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold text-indigo-700 outline-none focus:ring-2 focus:ring-blue-500/20 pr-8"
-              />
-              {(skuCt || skuCtSuggestions.length > 0 || detectedMaGianInSkuCt) && (
-                <button
-                  type="button"
-                  onClick={() => { handleSkuCtInput(""); setSkuCtSuggestions([]); setDetectedMaGianInSkuCt(''); }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600 hover:bg-slate-100 p-1 rounded-md text-xs font-bold transition-colors"
-                  title="Xóa / Đóng gợi ý"
-                >
-                  ✕
-                </button>
-              )}
+            {/* SKU CT with Auto-suggestions + First-Char Layer 2 Filter */}
+            <div ref={skuCtRowRef} className="col-span-2 relative z-30">
+              <div className="flex gap-2">
+                {/* Ô nhập SKU chi tiết (Lớp 1) */}
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={skuCt}
+                    onChange={(e) => handleSkuCtInput(e.target.value)}
+                    onBlur={handleSkuCtBlur}
+                    onFocus={() => {
+                      if (skuCt || skuCtFirstChar) {
+                        const q = (skuCt || '').trim();
+                        if (skuCtFirstChar || q.length < 8 || !q.includes('-')) {
+                          setSkuCtSuggestions(searchSkuCtMatches(q, skuCtFirstChar));
+                        }
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const raw = (skuCt || '').trim();
+                        if (raw.length === 3 && !raw.includes('-') && !skuCtFirstChar) {
+                          e.preventDefault();
+                          transferSkuCtToMaGian(raw);
+                        }
+                      }
+                    }}
+                    onPaste={(e) => {
+                      const pasteText = e.clipboardData.getData('text').trim();
+                      if (pasteText.length === 3 && !pasteText.includes('-') && !skuCtFirstChar) {
+                        e.preventDefault();
+                        transferSkuCtToMaGian(pasteText);
+                      }
+                    }}
+                    placeholder="SKU chi tiết (10 ký tự)..."
+                    title="SKU Chi tiết (10 ký tự - VD: Z068-WH-00, 201B-NA-00...)"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold text-indigo-700 outline-none focus:ring-2 focus:ring-blue-500/20 pr-8"
+                  />
+                  {(skuCt || skuCtSuggestions.length > 0 || detectedMaGianInSkuCt) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSkuCtInput('');
+                        setSkuCtSuggestions(skuCtFirstChar ? searchSkuCtMatches('', skuCtFirstChar) : []);
+                        setDetectedMaGianInSkuCt('');
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600 hover:bg-slate-100 p-1 rounded-md text-xs font-bold transition-colors"
+                      title="Xóa / Đóng gợi ý"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {/* Ô điền ký tự đầu tiên để lọc lớp 2 */}
+                <div className="relative w-28 sm:w-32 shrink-0">
+                  <input
+                    type="text"
+                    value={skuCtFirstChar}
+                    onChange={(e) => handleSkuCtFirstCharInput(e.target.value)}
+                    onFocus={() => {
+                      if (skuCtFirstChar || skuCt) {
+                        const rawCt = (skuCt || '').trim();
+                        let matches = searchSkuCtMatches(rawCt, skuCtFirstChar);
+                        if (matches.length === 0 && skuCtFirstChar && rawCt.length >= 8 && rawCt.includes('-')) {
+                          matches = searchSkuCtMatches('', skuCtFirstChar);
+                        }
+                        setSkuCtSuggestions(matches);
+                      }
+                    }}
+                    placeholder="Ký tự đầu..."
+                    title="Điền ký tự đầu tiên để lọc lớp 2 cho SKU CT (VD: Z, S, H, 2...)"
+                    className="w-full px-2.5 py-2 border border-indigo-300 bg-indigo-50/40 rounded-lg text-xs font-bold text-indigo-700 uppercase placeholder:normal-case placeholder:font-normal placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 pr-6 text-center"
+                  />
+                  {skuCtFirstChar && (
+                    <button
+                      type="button"
+                      onClick={() => handleSkuCtFirstCharInput('')}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600 hover:bg-indigo-100 p-0.5 rounded text-xs font-bold transition-colors"
+                      title="Xóa lọc ký tự đầu"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
 
               {(skuCtSuggestions.length > 0 || detectedMaGianInSkuCt) && (
                 <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-64 overflow-y-auto">
@@ -995,7 +1108,14 @@ export default function HangHoanDrawer({
                   {skuCtSuggestions.length > 0 && (
                     <>
                       <div className="sticky top-0 bg-slate-50 border-b border-slate-200 px-3 py-1.5 flex items-center justify-between text-[11px] font-bold text-slate-500 z-10">
-                        <span>Gợi ý SKU CT ({skuCtSuggestions.length})</span>
+                        <span className="flex items-center gap-1.5 flex-wrap">
+                          <span>Gợi ý SKU CT ({skuCtSuggestions.length})</span>
+                          {skuCtFirstChar && (
+                            <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[10px]">
+                              Ký tự đầu: {skuCtFirstChar}
+                            </span>
+                          )}
+                        </span>
                         <button
                           type="button"
                           onClick={(e) => {
