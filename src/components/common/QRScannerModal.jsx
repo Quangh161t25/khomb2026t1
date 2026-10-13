@@ -12,10 +12,13 @@ import {
   Copy,
   Check,
   RotateCcw,
+  RotateCw,
+  RefreshCw,
   Upload,
   Loader2,
   Sparkles,
-  ArrowRight
+  ArrowRight,
+  Crop,
 } from 'lucide-react';
 import { playSuccessSound } from '../../utils/audioUtils';
 
@@ -24,18 +27,27 @@ function extractCandidateCodes(rawText) {
   if (!rawText) return [];
   const candidates = new Set();
 
+  // Ghép các khoảng trắng bị ngắt nhầm giữa tiền tố vận chuyển và dãy số (VD: "SPXVN 03812..." -> "SPXVN03812...")
+  const normalizedText =
+    rawText +
+    '\n' +
+    rawText
+      .replace(/\b(SPX(?:VN)?|GHN|GHTK|JNT|LEX|LZD|VTP|VNPOST|TKM)\s+([A-Z0-9]{5,22})/gi, '$1$2')
+      .replace(/(\d{4,6})\s+(\d{4,6})(?:\s+(\d{3,6}))?/g, '$1$2$3');
+
   // 1. Các định dạng đơn vị vận chuyển phổ biến (Shopee SPX, GHN, GHTK, J&T, TikTok, Lazada, ViettelPost)
-  const spxMatches = rawText.match(/SPX[A-Z0-9]{8,25}/gi) || [];
+  const spxMatches = normalizedText.match(/SPX[A-Z0-9]{8,25}/gi) || [];
   spxMatches.forEach((m) => candidates.add(m.trim().toUpperCase()));
 
-  const ghnMatches = rawText.match(/GHN[A-Z0-9]{6,20}/gi) || [];
+  const ghnMatches = normalizedText.match(/GHN[A-Z0-9]{6,20}/gi) || [];
   ghnMatches.forEach((m) => candidates.add(m.trim().toUpperCase()));
 
-  const courierMatches = rawText.match(/(?:GHTK|JNT|LEX|LZD|VTP|VNPOST|TKM)[A-Z0-9]{5,20}/gi) || [];
+  const courierMatches =
+    normalizedText.match(/(?:GHTK|JNT|LEX|LZD|VTP|VNPOST|TKM)[A-Z0-9]{5,20}/gi) || [];
   courierMatches.forEach((m) => candidates.add(m.trim().toUpperCase()));
 
   // 2. Chuỗi chữ & số liền nhau từ 8-26 ký tự có chứa ít nhất 2 chữ số (mã vận đơn chuẩn)
-  const tokenMatches = rawText.match(/\b[A-Za-z0-9_-]{8,26}\b/g) || [];
+  const tokenMatches = normalizedText.match(/\b[A-Za-z0-9_-]{8,26}\b/g) || [];
   tokenMatches.forEach((token) => {
     const clean = token.replace(/^[_\-]+|[_\-]+$/g, '').toUpperCase();
     const digitCount = (clean.match(/\d/g) || []).length;
@@ -46,10 +58,105 @@ function extractCandidateCodes(rawText) {
   });
 
   // 3. Chuỗi số nguyên dài từ 9 đến 18 số (mã GHTK, J&T, TikTok thuần số)
-  const numericMatches = rawText.match(/\b\d{9,18}\b/g) || [];
+  const numericMatches = normalizedText.match(/\b\d{9,18}\b/g) || [];
   numericMatches.forEach((num) => candidates.add(num.trim()));
 
   return Array.from(candidates);
+}
+
+// Tiền xử lý ảnh trên Canvas để tăng độ chính xác khi Quét lại chữ trong ảnh
+function createPreprocessedCanvas(img, { mode = 'enhanced', cropRect = null } = {}) {
+  const sx = cropRect ? Math.max(0, Math.round(cropRect.x * img.width)) : 0;
+  const sy = cropRect ? Math.max(0, Math.round(cropRect.y * img.height)) : 0;
+  const sw = cropRect
+    ? Math.max(24, Math.min(img.width - sx, Math.round(cropRect.w * img.width)))
+    : img.width;
+  const sh = cropRect
+    ? Math.max(24, Math.min(img.height - sy, Math.round(cropRect.h * img.height)))
+    : img.height;
+
+  // Phóng to nếu vùng ảnh nhỏ để Tesseract đọc nét chữ rõ hơn
+  const scale = sw < 500 ? 2.2 : sw < 900 ? 1.5 : 1;
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(sw * scale);
+  canvas.height = Math.round(sh * scale);
+  const ctx = canvas.getContext('2d');
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+
+  if (mode === 'raw') {
+    return canvas;
+  }
+
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+
+  let sumLum = 0;
+  const pixelCount = data.length / 4;
+  for (let i = 0; i < data.length; i += 4) {
+    sumLum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+  }
+  const avgLum = sumLum / (pixelCount || 1);
+
+  for (let i = 0; i < data.length; i += 4) {
+    const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+
+    if (mode === 'bw') {
+      // Nhị phân hóa Đen - Trắng giúp nổi bật chữ trên tem nhiệt mờ hoặc bị lóa
+      const threshold = Math.min(205, Math.max(100, avgLum * 0.92));
+      const val = lum < threshold ? 0 : 255;
+      data[i] = val;
+      data[i + 1] = val;
+      data[i + 2] = val;
+    } else {
+      // mode === 'enhanced': Tăng tương phản mạnh (Contrast Stretch)
+      const contrast = 1.7;
+      let v = (lum - avgLum) * contrast + avgLum;
+      v = Math.max(0, Math.min(255, v));
+      data[i] = v;
+      data[i + 1] = v;
+      data[i + 2] = v;
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  return canvas;
+}
+
+// Xoay ảnh DataURL 90 độ
+function rotateImageDataUrl(imageSrc, degrees = 90) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      if (degrees === 90 || degrees === 270) {
+        canvas.width = img.height;
+        canvas.height = img.width;
+      } else {
+        canvas.width = img.width;
+        canvas.height = img.height;
+      }
+      const ctx = canvas.getContext('2d');
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate((degrees * Math.PI) / 180);
+      ctx.drawImage(img, -img.width / 2, -img.height / 2);
+      resolve(canvas.toDataURL('image/jpeg', 0.92));
+    };
+    img.onerror = reject;
+    img.src = imageSrc;
+  });
+}
+
+// Load HTMLImageElement từ DataURL
+function loadImageElement(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
 }
 
 // Helper sao chép clipboard an toàn
@@ -96,8 +203,15 @@ export default function QRScannerModal({
   // Trạng thái OCR
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
-  const [ocrResult, setOcrResult] = useState(null); // { fullText, candidates, imageSrc }
+  const [ocrResult, setOcrResult] = useState(null); // { fullText, candidates, imageSrc, scanModeLabel, error }
+  const [rescanCount, setRescanCount] = useState(0);
   const [copiedCode, setCopiedCode] = useState(null);
+
+  // Trạng thái khoanh vùng (crop) trên ảnh đã chụp để quét lại chính xác vùng chữ
+  const [cropRect, setCropRect] = useState(null); // { x, y, w, h } chuẩn hóa 0..1
+  const [isDraggingCrop, setIsDraggingCrop] = useState(false);
+  const cropStartRef = useRef(null);
+  const previewImgWrapRef = useRef(null);
 
   const scannerRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -108,6 +222,8 @@ export default function QRScannerModal({
       stopScanner();
       setOcrResult(null);
       setOcrLoading(false);
+      setCropRect(null);
+      setRescanCount(0);
       return;
     }
 
@@ -117,6 +233,7 @@ export default function QRScannerModal({
       try {
         setErrorMsg(null);
         setOcrResult(null);
+        setCropRect(null);
         const devices = await Html5Qrcode.getCameras();
         if (isMounted) {
           if (devices && devices.length > 0) {
@@ -254,50 +371,116 @@ export default function QRScannerModal({
     startScannerWithCamera(nextCamera.id);
   };
 
-  // 1. Chụp khung hình từ camera và thực hiện nhận diện OCR
-  const handleCaptureAndOcr = async () => {
+  // Hàm thực thi OCR trên một ảnh DataURL có sẵn (hỗ trợ quét lại không cần chụp lại)
+  const runOcrOnImageSrc = async (imageSrc, { mode = 'raw', customCrop = null, mergePrevious = false } = {}) => {
+    if (!imageSrc) return;
+    setOcrLoading(true);
+    setOcrProgress(0);
+
     try {
-      const videoEl = document.querySelector(`#${containerId} video`);
-      if (!videoEl) {
-        alert('Không tìm thấy khung hình video để chụp.');
-        return;
+      const img = await loadImageElement(imageSrc);
+
+      const modeLabels = {
+        raw: 'Ảnh gốc',
+        enhanced: 'Tăng nét & tương phản',
+        bw: 'Đen trắng rõ chữ',
+      };
+
+      // Nếu quét lại ở chế độ 'auto_retry', chạy kết hợp cả Tăng tương phản + Đen trắng để bắt tối đa mã
+      if (mode === 'auto_retry') {
+        const canvasEnhanced = createPreprocessedCanvas(img, { mode: 'enhanced', cropRect: customCrop });
+        const res1 = await Tesseract.recognize(canvasEnhanced, 'eng', {
+          logger: (m) => {
+            if (m.status === 'recognizing text' && typeof m.progress === 'number') {
+              setOcrProgress(Math.round(m.progress * 60));
+            }
+          },
+        });
+        const text1 = (res1?.data?.text || '').trim();
+        const codes1 = extractCandidateCodes(text1);
+
+        const canvasBw = createPreprocessedCanvas(img, { mode: 'bw', cropRect: customCrop });
+        const res2 = await Tesseract.recognize(canvasBw, 'eng', {
+          logger: (m) => {
+            if (m.status === 'recognizing text' && typeof m.progress === 'number') {
+              setOcrProgress(60 + Math.round(m.progress * 40));
+            }
+          },
+        });
+        const text2 = (res2?.data?.text || '').trim();
+        const codes2 = extractCandidateCodes(text2);
+
+        const combinedCodes = Array.from(
+          new Set([...(mergePrevious && ocrResult?.candidates ? ocrResult.candidates : []), ...codes1, ...codes2])
+        );
+        const combinedText = [text1, text2].filter(Boolean).join('\n---\n');
+
+        setOcrResult({
+          fullText: combinedText || ocrResult?.fullText || '',
+          candidates: combinedCodes,
+          imageSrc,
+          scanModeLabel: customCrop ? 'Đã quét lại vùng chọn (Tăng nét)' : 'Đã quét lại (Tăng nét + Đen trắng)',
+          error: null,
+        });
+      } else {
+        const canvas = createPreprocessedCanvas(img, { mode, cropRect: customCrop });
+        const res = await Tesseract.recognize(canvas, 'eng', {
+          logger: (m) => {
+            if (m.status === 'recognizing text' && typeof m.progress === 'number') {
+              setOcrProgress(Math.round(m.progress * 100));
+            }
+          },
+        });
+
+        const fullText = (res?.data?.text || '').trim();
+        const newCandidates = extractCandidateCodes(fullText);
+        const finalCandidates = mergePrevious && ocrResult?.candidates
+          ? Array.from(new Set([...newCandidates, ...ocrResult.candidates]))
+          : newCandidates;
+
+        setOcrResult({
+          fullText: fullText || (mergePrevious ? ocrResult?.fullText || '' : ''),
+          candidates: finalCandidates,
+          imageSrc,
+          scanModeLabel: customCrop ? `Vùng chọn (${modeLabels[mode] || mode})` : modeLabels[mode] || 'Ảnh gốc',
+          error: null,
+        });
       }
-
-      // Tạo canvas chụp frame
-      const canvas = document.createElement('canvas');
-      canvas.width = videoEl.videoWidth || videoEl.clientWidth || 640;
-      canvas.height = videoEl.videoHeight || videoEl.clientHeight || 480;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-
-      const imageSrc = canvas.toDataURL('image/jpeg', 0.92);
-
-      // Chạy Tesseract OCR
-      setOcrLoading(true);
-      setOcrProgress(0);
-
-      const res = await Tesseract.recognize(canvas, 'eng', {
-        logger: (m) => {
-          if (m.status === 'recognizing text' && typeof m.progress === 'number') {
-            setOcrProgress(Math.round(m.progress * 100));
-          }
-        },
-      });
-
-      const fullText = (res?.data?.text || '').trim();
-      const candidates = extractCandidateCodes(fullText);
-
-      setOcrResult({
-        fullText,
-        candidates,
-        imageSrc,
-      });
     } catch (err) {
       console.error('Lỗi nhận diện OCR:', err);
-      alert('Có lỗi khi đọc chữ OCR: ' + (err.message || 'Thử chụp lại rõ hơn'));
+      // Giữ nguyên bức ảnh đã chụp để người dùng bấm Quét lại mà không phải chụp lại từ đầu
+      setOcrResult((prev) => ({
+        fullText: prev?.fullText || '',
+        candidates: prev?.candidates || [],
+        imageSrc,
+        scanModeLabel: 'Quét lỗi - Có thể bấm Quét lại ngay trên ảnh này',
+        error: err.message || 'Không đọc được chữ ở lần quét này. Hãy bấm "Quét lại chữ trong ảnh" bên dưới.',
+      }));
     } finally {
       setOcrLoading(false);
     }
+  };
+
+  // 1. Chụp khung hình từ camera và thực hiện nhận diện OCR
+  const handleCaptureAndOcr = async () => {
+    const videoEl = document.querySelector(`#${containerId} video`);
+    if (!videoEl) {
+      alert('Không tìm thấy khung hình video để chụp.');
+      return;
+    }
+
+    // Tạo canvas chụp frame ngay lập tức và lưu lại ảnh
+    const canvas = document.createElement('canvas');
+    canvas.width = videoEl.videoWidth || videoEl.clientWidth || 640;
+    canvas.height = videoEl.videoHeight || videoEl.clientHeight || 480;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+
+    const imageSrc = canvas.toDataURL('image/jpeg', 0.92);
+    setCropRect(null);
+    setRescanCount(0);
+
+    await runOcrOnImageSrc(imageSrc, { mode: 'raw', customCrop: null, mergePrevious: false });
   };
 
   // 2. Đọc OCR từ tệp ảnh người dùng tải lên
@@ -307,45 +490,85 @@ export default function QRScannerModal({
 
     const reader = new FileReader();
     reader.onload = async (event) => {
-      const img = new Image();
-      img.onload = async () => {
-        try {
-          const canvas = document.createElement('canvas');
-          canvas.width = img.width;
-          canvas.height = img.height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0);
-
-          setOcrLoading(true);
-          setOcrProgress(0);
-
-          const res = await Tesseract.recognize(canvas, 'eng', {
-            logger: (m) => {
-              if (m.status === 'recognizing text' && typeof m.progress === 'number') {
-                setOcrProgress(Math.round(m.progress * 100));
-              }
-            },
-          });
-
-          const fullText = (res?.data?.text || '').trim();
-          const candidates = extractCandidateCodes(fullText);
-
-          setOcrResult({
-            fullText,
-            candidates,
-            imageSrc: event.target.result,
-          });
-        } catch (err) {
-          console.error('Lỗi nhận diện file ảnh OCR:', err);
-          alert('Không thể nhận diện ảnh: ' + (err.message || 'Vui lòng thử lại'));
-        } finally {
-          setOcrLoading(false);
-        }
-      };
-      img.src = event.target.result;
+      const imageSrc = event.target.result;
+      setCropRect(null);
+      setRescanCount(0);
+      await runOcrOnImageSrc(imageSrc, { mode: 'raw', customCrop: null, mergePrevious: false });
     };
     reader.readAsDataURL(file);
     e.target.value = '';
+  };
+
+  // 3. Quét lại chữ trực tiếp từ bức ảnh đã chụp (không cần mở camera chụp lại)
+  const handleRescanExistingImage = async (forcedMode = null) => {
+    if (!ocrResult?.imageSrc || ocrLoading) return;
+    const nextCount = rescanCount + 1;
+    setRescanCount(nextCount);
+    const modeToUse = forcedMode || 'auto_retry';
+    await runOcrOnImageSrc(ocrResult.imageSrc, {
+      mode: modeToUse,
+      customCrop: cropRect,
+      mergePrevious: true,
+    });
+  };
+
+  // 4. Xoay bức ảnh đã chụp 90° và tự động quét lại chữ
+  const handleRotateAndRescan = async () => {
+    if (!ocrResult?.imageSrc || ocrLoading) return;
+    try {
+      setOcrLoading(true);
+      const rotatedSrc = await rotateImageDataUrl(ocrResult.imageSrc, 90);
+      setCropRect(null);
+      await runOcrOnImageSrc(rotatedSrc, {
+        mode: 'auto_retry',
+        customCrop: null,
+        mergePrevious: false,
+      });
+    } catch (e) {
+      setOcrLoading(false);
+    }
+  };
+
+  // Xử lý kéo chọn vùng chữ (Crop) trực tiếp trên ảnh đã chụp
+  const getNormalizedPoint = (clientX, clientY) => {
+    const el = previewImgWrapRef.current;
+    if (!el) return { x: 0, y: 0 };
+    const rect = el.getBoundingClientRect();
+    const x = Math.max(0, Math.min(1, (clientX - rect.left) / (rect.width || 1)));
+    const y = Math.max(0, Math.min(1, (clientY - rect.top) / (rect.height || 1)));
+    return { x, y };
+  };
+
+  const handleCropPointerDown = (e) => {
+    if (ocrLoading) return;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const pt = getNormalizedPoint(clientX, clientY);
+    cropStartRef.current = pt;
+    setIsDraggingCrop(true);
+    setCropRect({ x: pt.x, y: pt.y, w: 0, h: 0 });
+  };
+
+  const handleCropPointerMove = (e) => {
+    if (!isDraggingCrop || !cropStartRef.current) return;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const pt = getNormalizedPoint(clientX, clientY);
+    const start = cropStartRef.current;
+    const x = Math.min(start.x, pt.x);
+    const y = Math.min(start.y, pt.y);
+    const w = Math.abs(pt.x - start.x);
+    const h = Math.abs(pt.y - start.y);
+    setCropRect({ x, y, w, h });
+  };
+
+  const handleCropPointerUp = () => {
+    if (!isDraggingCrop) return;
+    setIsDraggingCrop(false);
+    if (cropRect && (cropRect.w < 0.05 || cropRect.h < 0.04)) {
+      // Nếu chỉ chạm nhẹ (không kéo đủ rộng) thì hủy vùng chọn
+      setCropRect(null);
+    }
   };
 
   // Sao chép mã
@@ -369,6 +592,7 @@ export default function QRScannerModal({
   // Quay lại camera tiếp tục quét
   const handleRetake = () => {
     setOcrResult(null);
+    setCropRect(null);
     if (!scanning && currentCameraId) {
       startScannerWithCamera(currentCameraId);
     }
@@ -462,20 +686,123 @@ export default function QRScannerModal({
             </div>
           )}
 
-          {/* MÀN HÌNH 2: KẾT QUẢ OCR SAU KHI CHỤP */}
+          {/* MÀN HÌNH 2: KẾT QUẢ OCR SAU KHI CHỤP (CÓ QUÉT LẠI TRÊN ẢNH ĐÃ CHỤP) */}
           {ocrResult && (
-            <div className="p-4 space-y-4 bg-slate-50 min-h-[320px]">
-              {/* Ảnh chụp thu nhỏ */}
+            <div className="p-4 space-y-3.5 bg-slate-50 min-h-[320px]">
+              {/* Khung ảnh đã chụp + Hỗ trợ kéo khoanh vùng chữ + Các nút Quét lại ngay trên ảnh */}
               {ocrResult.imageSrc && (
-                <div className="relative rounded-xl overflow-hidden border border-slate-200 bg-black/5 max-h-36 flex items-center justify-center">
-                  <img
-                    src={ocrResult.imageSrc}
-                    alt="Frame captured"
-                    className="max-h-36 w-auto object-contain"
-                  />
-                  <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm text-white text-[11px] px-2 py-0.5 rounded-full">
-                    Ảnh chụp OCR
+                <div className="bg-white rounded-xl border border-slate-200 p-2.5 shadow-2xs space-y-2">
+                  <div className="flex items-center justify-between gap-2 text-[11px]">
+                    <span className="font-bold text-slate-700 flex items-center gap-1">
+                      <Crop className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Ảnh đã chụp (Có thể kéo khoanh vùng chữ để quét lại)</span>
+                    </span>
+                    {cropRect && (
+                      <button
+                        type="button"
+                        onClick={() => setCropRect(null)}
+                        className="text-rose-600 hover:underline font-semibold text-[11px] shrink-0"
+                      >
+                        Bỏ khoanh vùng
+                      </button>
+                    )}
                   </div>
+
+                  <div className="relative rounded-lg overflow-hidden border border-slate-200 bg-slate-900/95 flex items-center justify-center select-none">
+                    <div
+                      ref={previewImgWrapRef}
+                      onMouseDown={handleCropPointerDown}
+                      onMouseMove={handleCropPointerMove}
+                      onMouseUp={handleCropPointerUp}
+                      onMouseLeave={handleCropPointerUp}
+                      onTouchStart={handleCropPointerDown}
+                      onTouchMove={handleCropPointerMove}
+                      onTouchEnd={handleCropPointerUp}
+                      className="relative inline-block max-h-48 cursor-crosshair touch-none"
+                    >
+                      <img
+                        src={ocrResult.imageSrc}
+                        alt="Frame captured"
+                        draggable={false}
+                        className="max-h-48 w-auto object-contain block pointer-events-none"
+                      />
+
+                      {/* Khung khoanh vùng chữ nếu người dùng kéo chọn */}
+                      {cropRect && cropRect.w > 0.01 && cropRect.h > 0.01 && (
+                        <div
+                          className="absolute border-2 border-amber-400 bg-amber-400/20 pointer-events-none shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]"
+                          style={{
+                            left: `${cropRect.x * 100}%`,
+                            top: `${cropRect.y * 100}%`,
+                            width: `${cropRect.w * 100}%`,
+                            height: `${cropRect.h * 100}%`,
+                          }}
+                        />
+                      )}
+                    </div>
+
+                    {ocrResult.scanModeLabel && (
+                      <div className="absolute top-2 right-2 bg-black/65 backdrop-blur-xs text-white text-[10px] px-2 py-0.5 rounded-full pointer-events-none">
+                        {ocrResult.scanModeLabel}
+                      </div>
+                    )}
+
+                    {/* Lớp phủ loading khi đang Quét lại chữ trong ảnh */}
+                    {ocrLoading && (
+                      <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-xs z-20 flex flex-col items-center justify-center p-3 text-center">
+                        <Loader2 className="w-8 h-8 text-indigo-400 animate-spin mb-1.5" />
+                        <p className="text-white text-xs font-bold">
+                          Đang quét lại chữ trong ảnh ({ocrProgress}%)...
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Thanh công cụ Quét lại trực tiếp từ ảnh đã chụp (Không cần chụp lại) */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                    <button
+                      type="button"
+                      disabled={ocrLoading}
+                      onClick={() => handleRescanExistingImage('auto_retry')}
+                      className="flex-1 min-w-[160px] py-2 px-3 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                      title="Quét lại chữ từ bức ảnh này với chế độ làm nét & tăng tương phản (không cần chụp lại)"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${ocrLoading ? 'animate-spin' : ''}`} />
+                      <span>
+                        {cropRect ? 'Quét lại vùng đã chọn' : 'Quét lại chữ trong ảnh'}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={ocrLoading}
+                      onClick={() => handleRescanExistingImage('bw')}
+                      className="py-2 px-2.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                      title="Chuyển ảnh sang Đen - Trắng độ tương phản cao rồi quét lại"
+                    >
+                      <ScanText className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Đen trắng</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={ocrLoading}
+                      onClick={handleRotateAndRescan}
+                      className="py-2 px-2.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                      title="Xoay ảnh 90 độ và quét lại chữ"
+                    >
+                      <RotateCw className="w-3.5 h-3.5 text-slate-600" />
+                      <span>Xoay 90°</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Thông báo nếu lần quét trước gặp lỗi */}
+              {ocrResult.error && (
+                <div className="bg-rose-50 border border-rose-200 rounded-xl p-2.5 text-xs text-rose-700 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{ocrResult.error}</span>
                 </div>
               )}
 
@@ -539,7 +866,7 @@ export default function QRScannerModal({
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 flex items-start gap-2">
                     <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
                     <div>
-                      Không tự động lọc được mã vận đơn định dạng thông dụng. Bạn có thể xem và chọn copy trực tiếp từ toàn bộ chữ đọc được bên dưới.
+                      Chưa lọc được mã vận đơn chuẩn. Bạn có thể bấm <b>"Quét lại chữ trong ảnh"</b> (hoặc kéo khoanh vùng dòng chữ trên ảnh rồi bấm Quét lại) mà không cần chụp lại ảnh mới.
                     </div>
                   </div>
                 )}
@@ -629,11 +956,21 @@ export default function QRScannerModal({
             <div className="flex items-center gap-2">
               <button
                 type="button"
+                disabled={ocrLoading}
+                onClick={() => handleRescanExistingImage('auto_retry')}
+                className="flex-1 py-2 px-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+              >
+                <RefreshCw className={`w-4 h-4 ${ocrLoading ? 'animate-spin' : ''}`} />
+                <span>{cropRect ? 'Quét lại vùng chọn' : 'Quét lại ảnh này'}</span>
+              </button>
+              <button
+                type="button"
+                disabled={ocrLoading}
                 onClick={handleRetake}
-                className="flex-1 py-2 px-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                className="py-2 px-3 bg-slate-200 hover:bg-slate-300 disabled:opacity-50 text-slate-700 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
               >
                 <RotateCcw className="w-4 h-4" />
-                <span>Quay lại quét camera</span>
+                <span>Chụp lại</span>
               </button>
               <button
                 type="button"
@@ -641,7 +978,7 @@ export default function QRScannerModal({
                   stopScanner();
                   onClose();
                 }}
-                className="py-2 px-4 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-xl font-medium text-xs transition-colors"
+                className="py-2 px-3.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-xl font-medium text-xs transition-colors"
               >
                 Đóng
               </button>

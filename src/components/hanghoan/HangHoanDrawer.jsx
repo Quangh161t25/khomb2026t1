@@ -6,6 +6,7 @@ import {
   Camera,
   FolderOpen,
   Copy,
+  Check,
   Trash2,
   Image as ImageIcon,
   History,
@@ -56,6 +57,32 @@ export default function HangHoanDrawer({
   const [saving, setSaving] = useState(false);
   const [duplicateMvdNotice, setDuplicateMvdNotice] = useState('');
   const [cameraModalSlot, setCameraModalSlot] = useState(null);
+  const [copiedMvd2, setCopiedMvd2] = useState(false);
+
+  const handleCopyMvd2 = async () => {
+    const val = (mvd2 || '').trim();
+    if (!val) return;
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(val);
+      } else {
+        const el = document.createElement('textarea');
+        el.value = val;
+        el.style.position = 'fixed';
+        el.style.opacity = '0';
+        document.body.appendChild(el);
+        el.focus();
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+      }
+      setCopiedMvd2(true);
+      toast.success(`Đã sao chép MVD 2: ${val}`, { autoClose: 1500 });
+      setTimeout(() => setCopiedMvd2(false), 1800);
+    } catch (e) {
+      toast.error('Không thể sao chép MVD 2');
+    }
+  };
 
   // Refs cho các input chụp ảnh và chọn file của từng slot
   const cameraInputRef1 = useRef(null);
@@ -103,7 +130,6 @@ export default function HangHoanDrawer({
   const [mdhSuggestions, setMdhSuggestions] = useState([]);
   const [maGianSuggestions, setMaGianSuggestions] = useState([]);
   const [maGianSkuCtSuggestions, setMaGianSkuCtSuggestions] = useState([]);
-  const [detectedMaGianInSkuCt, setDetectedMaGianInSkuCt] = useState('');
 
   const uniqueMaGianList = React.useMemo(() => {
     return [...new Set(udctData.map(i => (i.ma_gian || '').trim()).filter(Boolean))].sort();
@@ -200,19 +226,6 @@ export default function HangHoanDrawer({
 
     return allMatches.slice(0, 30);
   }, [sanphamData, udctData]);
-
-  const transferSkuCtToMaGian = (code) => {
-    const clean = (code || '').trim().toUpperCase();
-    if (!clean) return;
-    setMaGian(clean);
-    setSkuCt('');
-    setSku('');
-    setTenSp('');
-    setSkuCtSuggestions([]);
-    setDetectedMaGianInSkuCt('');
-    setSkuCtFirstChar('');
-    toast.info(`💡 Đã nhận diện Mã gian (${clean}), tự động chuyển vào ô Mã gian!`, { autoClose: 2000 });
-  };
 
   const selectSkuCtFromMaGian = (item) => {
     const chosenSkuCt = item.sku_ct || item.id_sp_ct || '';
@@ -347,6 +360,7 @@ export default function HangHoanDrawer({
   const drawerRef = useRef(null);
   const maGianRef = useRef(null);
   const skuCtRowRef = useRef(null);
+  const skuCtInputRef = useRef(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -604,15 +618,8 @@ export default function HangHoanDrawer({
     const prefix = (skuCtFirstChar || '').trim().toLowerCase();
     if (!q && !prefix) {
       setSkuCtSuggestions([]);
-      setDetectedMaGianInSkuCt('');
       return;
     }
-
-    // Kiểm tra nếu người dùng đang nhập Mã gian (3 ký tự không chứa '-') vào ô SKU CT
-    const foundGian = (q.length === 3 && !q.includes('-'))
-      ? uniqueMaGianList.find(m => m.toLowerCase() === q) || (/^[a-z0-9]{3}$/i.test(q) ? q.toUpperCase() : null)
-      : null;
-    setDetectedMaGianInSkuCt(foundGian || '');
 
     const matches = searchSkuCtMatches(q, skuCtFirstChar);
     setSkuCtSuggestions(matches);
@@ -647,24 +654,6 @@ export default function HangHoanDrawer({
     setSkuCtSuggestions(matches);
   };
 
-  const handleSkuCtBlur = (e) => {
-    // Nếu đang bấm sang ô lọc ký tự đầu hoặc danh sách gợi ý trong cùng cụm SKU CT thì không tự chuyển Mã gian
-    if (skuCtRowRef.current && e?.relatedTarget && skuCtRowRef.current.contains(e.relatedTarget)) {
-      return;
-    }
-    if ((skuCtFirstChar || '').trim()) {
-      return;
-    }
-    const raw = (skuCt || '').trim();
-    // Mã gian có 3 ký tự (không có dấu -)
-    if (raw.length === 3 && !raw.includes('-')) {
-      const isGian = uniqueMaGianList.some(m => m.toLowerCase() === raw.toLowerCase()) || /^[A-Za-z0-9]{3}$/.test(raw);
-      if (isGian) {
-        transferSkuCtToMaGian(raw);
-      }
-    }
-  };
-
   const selectSkuCt = (item) => {
     const chosenSkuCt = item.sku_ct || item.id_sp_ct || '';
     setSkuCt(chosenSkuCt);
@@ -678,7 +667,6 @@ export default function HangHoanDrawer({
     }
     if (item.ten_sp) setTenSp(item.ten_sp);
     setSkuCtSuggestions([]);
-    setDetectedMaGianInSkuCt('');
     setSkuCtFirstChar('');
   };
 
@@ -989,7 +977,12 @@ export default function HangHoanDrawer({
                       {maGianSuggestions.map((item, i) => (
                         <div
                           key={i}
-                          onClick={() => { setMaGian(item); setMaGianSuggestions([]); setMaGianSkuCtSuggestions([]); }}
+                          onClick={() => {
+                            setMaGian(item);
+                            setMaGianSuggestions([]);
+                            setMaGianSkuCtSuggestions([]);
+                            skuCtInputRef.current?.focus();
+                          }}
                           className="p-2 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-0 text-xs font-medium text-slate-700"
                         >
                           {item}
@@ -1007,10 +1000,10 @@ export default function HangHoanDrawer({
                 {/* Ô nhập SKU chi tiết (Lớp 1) */}
                 <div className="relative flex-1">
                   <input
+                    ref={skuCtInputRef}
                     type="text"
                     value={skuCt}
                     onChange={(e) => handleSkuCtInput(e.target.value)}
-                    onBlur={handleSkuCtBlur}
                     onFocus={() => {
                       if (skuCt || skuCtFirstChar) {
                         const q = (skuCt || '').trim();
@@ -1019,33 +1012,16 @@ export default function HangHoanDrawer({
                         }
                       }
                     }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        const raw = (skuCt || '').trim();
-                        if (raw.length === 3 && !raw.includes('-') && !skuCtFirstChar) {
-                          e.preventDefault();
-                          transferSkuCtToMaGian(raw);
-                        }
-                      }
-                    }}
-                    onPaste={(e) => {
-                      const pasteText = e.clipboardData.getData('text').trim();
-                      if (pasteText.length === 3 && !pasteText.includes('-') && !skuCtFirstChar) {
-                        e.preventDefault();
-                        transferSkuCtToMaGian(pasteText);
-                      }
-                    }}
                     placeholder="SKU chi tiết (10 ký tự)..."
                     title="SKU Chi tiết (10 ký tự - VD: Z068-WH-00, 201B-NA-00...)"
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold text-indigo-700 outline-none focus:ring-2 focus:ring-blue-500/20 pr-8"
                   />
-                  {(skuCt || skuCtSuggestions.length > 0 || detectedMaGianInSkuCt) && (
+                  {(skuCt || skuCtSuggestions.length > 0) && (
                     <button
                       type="button"
                       onClick={() => {
                         handleSkuCtInput('');
                         setSkuCtSuggestions(skuCtFirstChar ? searchSkuCtMatches('', skuCtFirstChar) : []);
-                        setDetectedMaGianInSkuCt('');
                       }}
                       className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600 hover:bg-slate-100 p-1 rounded-md text-xs font-bold transition-colors"
                       title="Xóa / Đóng gợi ý"
@@ -1088,23 +1064,8 @@ export default function HangHoanDrawer({
                 </div>
               </div>
 
-              {(skuCtSuggestions.length > 0 || detectedMaGianInSkuCt) && (
+              {skuCtSuggestions.length > 0 && (
                 <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-64 overflow-y-auto">
-                  {detectedMaGianInSkuCt && (
-                    <div
-                      onClick={() => transferSkuCtToMaGian(detectedMaGianInSkuCt)}
-                      className="p-2.5 bg-amber-50 hover:bg-amber-100 border-b border-amber-200 cursor-pointer flex items-center justify-between text-xs text-amber-800 transition-colors"
-                    >
-                      <div className="flex items-center gap-1.5 font-bold">
-                        <span>🏢 Nhận diện Mã gian:</span>
-                        <span className="px-1.5 py-0.5 bg-amber-200 text-amber-900 rounded">{detectedMaGianInSkuCt}</span>
-                      </div>
-                      <span className="text-[11px] bg-amber-600 hover:bg-amber-700 text-white font-bold px-2 py-0.5 rounded shadow-xs">
-                        Chuyển sang Mã gian ➔
-                      </span>
-                    </div>
-                  )}
-
                   {skuCtSuggestions.length > 0 && (
                     <>
                       <div className="sticky top-0 bg-slate-50 border-b border-slate-200 px-3 py-1.5 flex items-center justify-between text-[11px] font-bold text-slate-500 z-10">
@@ -1271,11 +1232,35 @@ export default function HangHoanDrawer({
                         type="button"
                         onClick={() => { setMvd2(''); setMvd2Suggestions([]); }}
                         className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                        title="Xóa MVD 2"
                       >
                         ✕
                       </button>
                     )}
                   </div>
+                  <button
+                    type="button"
+                    disabled={!mvd2?.trim()}
+                    onClick={handleCopyMvd2}
+                    title="Sao chép MVD 2"
+                    className={`px-2.5 py-2 border rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                      copiedMvd2
+                        ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                        : 'bg-slate-50 border-slate-300 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 text-slate-700'
+                    }`}
+                  >
+                    {copiedMvd2 ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Đã chép</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Chép</span>
+                      </>
+                    )}
+                  </button>
                   <button
                     type="button"
                     onClick={() => onOpenQrScan((code) => { setMvd2(code); setMvd2Suggestions([]); })}

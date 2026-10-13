@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Copy, Check } from 'lucide-react';
 import { formatYmdToDmy } from '../../utils/dateUtils';
 import { formatNumber } from '../../utils/formatters';
 import { useColumnWidths } from '../../context/ColumnWidthContext';
+import { useToast } from '../../context/ToastContext';
 import ResizableTh from '../common/ResizableTh';
 import FooterPortal from '../common/FooterPortal';
 import Pagination from '../common/Pagination';
@@ -18,7 +20,33 @@ export default function HangHoanTable({
   const list = data || items || [];
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
+  const [copiedId, setCopiedId] = useState(null);
   const { getColumnWidth, isColumnVisible } = useColumnWidths();
+  const toast = useToast();
+
+  const handleCopyText = async (e, text, rowKey) => {
+    e.stopPropagation();
+    const val = (text || '').toString().trim();
+    if (!val) return;
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(val);
+      } else {
+        const el = document.createElement('textarea');
+        el.value = val;
+        el.style.position = 'fixed';
+        el.style.opacity = '0';
+        document.body.appendChild(el);
+        el.focus();
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+      }
+      setCopiedId(rowKey);
+      toast?.success?.(`Đã sao chép MVD 2: ${val}`, { autoClose: 1500 });
+      setTimeout(() => setCopiedId(null), 1500);
+    } catch (err) {}
+  };
 
   const colStyle = useCallback(
     (key, defaultW) => {
@@ -145,10 +173,32 @@ export default function HangHoanTable({
                     {item.mvd}
                   </td>
                   <td
-                    className="px-3 py-2 text-left text-slate-600 font-mono select-all whitespace-nowrap overflow-hidden text-ellipsis"
+                    className="px-3 py-2 text-left text-slate-600 font-mono whitespace-nowrap overflow-hidden text-ellipsis"
                     style={colStyle('mvd_2', 150)}
                   >
-                    {item.mvd_2 || '-'}
+                    {item.mvd_2 ? (
+                      <div className="flex items-center gap-1 min-w-0">
+                        <span className="select-all truncate" title={item.mvd_2}>{item.mvd_2}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => handleCopyText(e, item.mvd_2, item.id || item.rowIndex || index)}
+                          className={`p-1 rounded transition-colors shrink-0 cursor-pointer ${
+                            copiedId === (item.id || item.rowIndex || index)
+                              ? 'text-emerald-600 bg-emerald-50'
+                              : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'
+                          }`}
+                          title="Sao chép MVD 2"
+                        >
+                          {copiedId === (item.id || item.rowIndex || index) ? (
+                            <Check className="w-3 h-3" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
+                        </button>
+                      </div>
+                    ) : (
+                      '-'
+                    )}
                   </td>
                   <td
                     className="px-3 py-2 text-center font-semibold text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis"

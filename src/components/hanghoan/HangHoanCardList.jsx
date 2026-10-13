@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { Copy, Check } from 'lucide-react';
 import { formatYmdToDmy } from '../../utils/dateUtils';
 import { formatNumber } from '../../utils/formatters';
+import { useToast } from '../../context/ToastContext';
 
 export default function HangHoanCardList({
   items,
@@ -13,6 +15,32 @@ export default function HangHoanCardList({
 }) {
   const list = data || items || [];
   const [displayLimit, setDisplayLimit] = useState(50);
+  const [copiedId, setCopiedId] = useState(null);
+  const toast = useToast();
+
+  const handleCopyText = async (e, text, rowKey) => {
+    e.stopPropagation();
+    const val = (text || '').toString().trim();
+    if (!val) return;
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(val);
+      } else {
+        const el = document.createElement('textarea');
+        el.value = val;
+        el.style.position = 'fixed';
+        el.style.opacity = '0';
+        document.body.appendChild(el);
+        el.focus();
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+      }
+      setCopiedId(rowKey);
+      toast?.success?.(`Đã sao chép MVD 2: ${val}`, { autoClose: 1500 });
+      setTimeout(() => setCopiedId(null), 1500);
+    } catch (err) {}
+  };
 
   useEffect(() => {
     setDisplayLimit(50);
@@ -96,10 +124,26 @@ export default function HangHoanCardList({
               </span>
               {item.mvd_2 && (
                 <span
-                  className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium border border-slate-200 select-all shrink-0"
+                  className="text-xs bg-slate-100 text-slate-600 pl-1.5 pr-1 py-0.5 rounded font-medium border border-slate-200 shrink-0 inline-flex items-center gap-1"
                   title={`MVD 2: ${item.mvd_2}`}
                 >
-                  {item.mvd_2}
+                  <span className="select-all">{item.mvd_2}</span>
+                  <button
+                    type="button"
+                    onClick={(e) => handleCopyText(e, item.mvd_2, item.id || item.rowIndex || index)}
+                    className={`p-0.5 rounded transition-colors cursor-pointer ${
+                      copiedId === (item.id || item.rowIndex || index)
+                        ? 'text-emerald-600 bg-emerald-100'
+                        : 'text-slate-400 hover:text-blue-600 hover:bg-slate-200'
+                    }`}
+                    title="Sao chép MVD 2"
+                  >
+                    {copiedId === (item.id || item.rowIndex || index) ? (
+                      <Check className="w-3 h-3" />
+                    ) : (
+                      <Copy className="w-3 h-3" />
+                    )}
+                  </button>
                 </span>
               )}
             </div>
