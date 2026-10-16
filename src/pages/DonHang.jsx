@@ -40,7 +40,11 @@ import {
   X,
   Plus,
   RefreshCw,
+  Camera,
+  LayoutGrid,
+  TableProperties,
 } from 'lucide-react';
+import QRScannerModal from '../components/common/QRScannerModal';
 
 const PAGE_SIZE = 100;
 const UDCT_TRANG_THAI_OPTIONS = [
@@ -101,6 +105,23 @@ export default function DonHangPage() {
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
+
+  // View Mode: 'card' on mobile by default, 'table' on desktop
+  const [viewMode, setViewMode] = useState(() => {
+    const saved = localStorage.getItem('udct_view_mode');
+    if (saved) return saved;
+    return window.innerWidth < 768 ? 'card' : 'table';
+  });
+
+  const setViewModeAndSave = (mode) => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('udct_view_mode', mode);
+    } catch (e) {}
+  };
+
+  // QR Scanner Modal State
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   // Selection
   const [selectedRowIndices, setSelectedRowIndices] = useState(new Set());
@@ -901,24 +922,80 @@ export default function DonHangPage() {
               ))}
             </datalist>
 
-            {/* Search Input */}
-            <div className="relative min-w-[180px]">
-              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  setCurrentPage(1);
-                }}
-                placeholder="Tìm MVD, MDH, SKU..."
-                className="w-full pl-8 pr-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-primary/20 font-medium"
-              />
+            {/* Search Input with QR Scan */}
+            <div className="relative min-w-[200px] flex-1 flex items-center gap-1">
+              <div className="relative flex-1">
+                <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  placeholder="Tìm MVD, MDH, SKU... (hoặc quét QR)"
+                  className="w-full pl-8 pr-7 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-primary/20 font-medium"
+                />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchTerm('');
+                      setCurrentPage(1);
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                    title="Xóa tìm kiếm"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {/* QR Scan Button */}
+              <button
+                type="button"
+                onClick={() => setScannerOpen(true)}
+                className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 font-bold rounded-lg text-xs flex items-center gap-1 shrink-0 shadow-2xs transition-colors cursor-pointer"
+                title="Mở camera quét mã QR / Barcode tìm đơn"
+              >
+                <Camera className="w-3.5 h-3.5 text-indigo-600" />
+                <span className="hidden sm:inline">Quét QR</span>
+              </button>
             </div>
           </div>
 
-          {/* Badges: Dòng & MVD */}
+          {/* Badges: Dòng & MVD + View Mode Toggle */}
           <div className="flex items-center gap-2">
+            {/* View Mode Toggle: Card vs Table */}
+            <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setViewModeAndSave('card')}
+                className={`p-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${
+                  viewMode === 'card'
+                    ? 'bg-white text-blue-600 shadow-2xs'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+                title="Chế độ Thẻ (Tối ưu điện thoại)"
+              >
+                <LayoutGrid className="w-4 h-4" />
+                <span className="hidden sm:inline">Thẻ</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewModeAndSave('table')}
+                className={`p-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${
+                  viewMode === 'table'
+                    ? 'bg-white text-blue-600 shadow-2xs'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+                title="Chế độ Bảng"
+              >
+                <TableProperties className="w-4 h-4" />
+                <span className="hidden sm:inline">Bảng</span>
+              </button>
+            </div>
+
             <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 shadow-2xs">
               <span className="text-[11px] text-slate-500 font-semibold">Dòng</span>
               <span className="text-xs font-bold text-primary">{filteredData.length.toLocaleString('vi-VN')}</span>
@@ -1224,11 +1301,152 @@ export default function DonHangPage() {
         </div>
       </div>
 
-      {/* Main Table Container */}
-      <div className="bg-white rounded-xl shadow-xs border border-slate-200 overflow-hidden flex flex-col flex-1 min-h-[420px]">
-        <div className="overflow-x-auto flex-1 min-h-[380px] max-h-[calc(100vh-235px)] overflow-y-auto custom-scrollbar">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead className="bg-slate-100 text-slate-700 font-bold uppercase sticky top-0 z-20 select-none shadow-2xs">
+      {/* Main Content: Card View on Mobile vs Table View */}
+      {viewMode === 'card' ? (
+        <div className="space-y-2.5 flex-1 overflow-y-auto custom-scrollbar p-1">
+          {paginatedData.length === 0 ? (
+            <div className="p-8 text-center text-slate-400 text-sm bg-white rounded-2xl border border-slate-200">
+              Không có dữ liệu đơn chi tiết phù hợp với bộ lọc.
+            </div>
+          ) : (
+            paginatedData.map((item) => {
+              const isSelected = selectedRowIndices.has(item.rowIndex);
+              const isHuy =
+                (item.trang_thai || '').toLowerCase().includes('hủy') ||
+                (item.trang_thai || '').toLowerCase().includes('hết hàng');
+
+              return (
+                <div
+                  key={item.rowIndex}
+                  onClick={() => handleOpenDrawer(item)}
+                  className={`rounded-xl border p-3 shadow-xs hover:shadow-md transition-all cursor-pointer active:scale-[0.99] space-y-2 ${
+                    isSelected
+                      ? 'bg-blue-50/70 border-blue-300'
+                      : 'bg-white border-slate-200 hover:border-indigo-300'
+                  }`}
+                >
+                  {/* Row 1: Checkbox + MVD + Sàn + Khung H */}
+                  <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleRowSelection(item.rowIndex)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-4 h-4 cursor-pointer accent-blue-600 rounded border-slate-300 shrink-0"
+                      />
+                      <span className="font-bold text-sm text-slate-900 tracking-tight select-all truncate font-mono">
+                        {item.mvd || item.mdh || 'Không có MVD'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      {item.san && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-50 text-orange-700 border border-orange-200">
+                          {normalizeSanLabel(item.san)}
+                        </span>
+                      )}
+                      {item.khung_h && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                          {item.khung_h}h
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Row 2: SKU con & Tên SP & Số lượng */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="font-bold text-indigo-700 font-mono shrink-0">
+                          {item.id_sp_ct || item.id_sp || 'Chưa gán SKU'}
+                        </span>
+                        {item.id_sp && item.id_sp !== item.id_sp_ct && (
+                          <span className="text-[10px] bg-slate-100 text-slate-600 px-1 py-0.2 rounded font-medium border border-slate-200 shrink-0">
+                            Mã: {item.id_sp}
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded shrink-0">
+                        x{item.so_luong || 1}
+                      </span>
+                    </div>
+
+                    <div className="text-xs text-slate-600 line-clamp-2" title={item.ten_sp}>
+                      {item.ten_sp || 'Chưa có tên sản phẩm'}
+                    </div>
+                  </div>
+
+                  {/* Row 3: Gian hàng, Ngày, Trạng thái & Quick Actions */}
+                  <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1 border-t border-slate-100 text-xs text-slate-500">
+                    <div className="flex items-center gap-2">
+                      {item.ma_gian && (
+                        <span className="font-semibold text-slate-700 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100 text-[11px]">
+                          🏪 {item.ma_gian}
+                        </span>
+                      )}
+                      <span className="text-[11px]">📅 {item.ngay}</span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                      {item.trang_thai ? (
+                        <span
+                          className={`px-2 py-0.5 rounded-md text-[10.5px] font-bold border ${
+                            item.trang_thai === '1 THAY THẾ'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : isHuy
+                              ? 'bg-rose-50 text-rose-700 border-rose-200'
+                              : 'bg-blue-50 text-blue-700 border-blue-200'
+                          }`}
+                        >
+                          {item.trang_thai}
+                        </span>
+                      ) : (
+                        <span className="text-[10.5px] text-slate-400 italic">Chưa xử lý</span>
+                      )}
+
+                      {!isKinhDoanh && (
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleQuickRowStatus(item, '1 THAY THẾ')}
+                            className="px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded border border-emerald-200"
+                            title="Đổi thành 1 THAY THẾ"
+                          >
+                            ĐỔI
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleQuickRowStatus(item, '2 HỦY')}
+                            className="px-1.5 py-0.5 text-[10px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded border border-rose-200"
+                            title="Đổi thành 2 HỦY"
+                          >
+                            HỦY
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Row 4 (nếu có ghi chú hoặc tình trạng) */}
+                  {(item.ghi_chu || item.tinh_trang) && (
+                    <div className="text-[11px] text-amber-800 bg-amber-50/70 p-1.5 rounded-lg border border-amber-200/60 truncate">
+                      {item.ghi_chu && <span>📝 {item.ghi_chu}</span>}
+                      {item.ghi_chu && item.tinh_trang && <span className="mx-1">•</span>}
+                      {item.tinh_trang && <span className="italic">{item.tinh_trang}</span>}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      ) : (
+        /* Main Table Container */
+        <div className="bg-white rounded-xl shadow-xs border border-slate-200 overflow-hidden flex flex-col flex-1 min-h-[420px]">
+          <div className="overflow-x-auto flex-1 min-h-[380px] max-h-[calc(100vh-235px)] overflow-y-auto custom-scrollbar">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead className="bg-slate-100 text-slate-700 font-bold uppercase sticky top-0 z-20 select-none shadow-2xs">
               <tr>
                 {isColumnVisible('donhang', 'checkbox') && (
                   <th
@@ -1583,27 +1801,28 @@ export default function DonHangPage() {
             </tbody>
           </table>
         </div>
-
-        {/* Table Footer: Pagination rendered in Bottom Footer right next to copyright */}
-        <FooterPortal>
-          <div className="flex items-center gap-2 sm:gap-3 text-xs shrink-0">
-            <span className="text-slate-300 font-medium hidden sm:inline">•</span>
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              totalRows={filteredData.length}
-              pageSize={pageSize}
-              onPageSizeChange={(newSize) => {
-                setPageSize(newSize);
-                setCurrentPage(1);
-              }}
-              onPageChange={setCurrentPage}
-              pageSizeOptions={[25, 50, 100, 200, 500, 'all']}
-              maxButtons={5}
-            />
-          </div>
-        </FooterPortal>
       </div>
+    )}
+
+    {/* Table Footer: Pagination rendered in Bottom Footer right next to copyright */}
+    <FooterPortal>
+      <div className="flex items-center gap-2 sm:gap-3 text-xs shrink-0">
+        <span className="text-slate-300 font-medium hidden sm:inline">•</span>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalRows={filteredData.length}
+          pageSize={pageSize}
+          onPageSizeChange={(newSize) => {
+            setPageSize(newSize);
+            setCurrentPage(1);
+          }}
+          onPageChange={setCurrentPage}
+          pageSizeOptions={[25, 50, 100, 200, 500, 'all']}
+          maxButtons={5}
+        />
+      </div>
+    </FooterPortal>
 
       {/* Floating Bulk Action Bar */}
       <BulkActionBar
@@ -1822,6 +2041,18 @@ export default function DonHangPage() {
           </div>
         </div>
       )}
+
+      {/* QR Scanner Modal for Search */}
+      <QRScannerModal
+        isOpen={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onScanSuccess={(code) => {
+          setSearchTerm(code);
+          setCurrentPage(1);
+          showToast(`Đã quét mã: ${code}`, 'success');
+        }}
+        title="Quét mã QR / Barcode tìm đơn"
+      />
     </div>
   );
 }
