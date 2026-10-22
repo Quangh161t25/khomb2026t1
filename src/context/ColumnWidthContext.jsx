@@ -145,6 +145,7 @@ const STORAGE_KEY_VISIBILITY = 'KHO_2026_COLUMN_VISIBILITY';
 const STORAGE_KEY_LABELS = 'KHO_2026_COLUMN_LABELS';
 const STORAGE_KEY_ALIGN = 'KHO_2026_COLUMN_ALIGN';
 const STORAGE_KEY_WRAP = 'KHO_2026_COLUMN_WRAP';
+const STORAGE_KEY_ORDER = 'KHO_2026_COLUMN_ORDER';
 const STORAGE_KEY_SYSTEM_FONT_SIZE = 'KHO_2026_SYSTEM_FONT_SIZE';
 const STORAGE_KEY_TABLE_FONT_SIZE = 'KHO_2026_TABLE_FONT_SIZE';
 
@@ -312,6 +313,32 @@ function getInitialWrap() {
   return initial;
 }
 
+function getInitialOrder() {
+  const initial = {};
+  Object.keys(MODULE_COLUMNS_CONFIG).forEach((modKey) => {
+    initial[modKey] = MODULE_COLUMNS_CONFIG[modKey].columns.map((c) => c.key);
+  });
+
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY_ORDER);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      Object.keys(parsed).forEach((modKey) => {
+        if (MODULE_COLUMNS_CONFIG[modKey] && Array.isArray(parsed[modKey])) {
+          const defaultKeys = MODULE_COLUMNS_CONFIG[modKey].columns.map((c) => c.key);
+          const validSaved = parsed[modKey].filter((k) => defaultKeys.includes(k));
+          const missing = defaultKeys.filter((k) => !validSaved.includes(k));
+          initial[modKey] = [...validSaved, ...missing];
+        }
+      });
+    }
+  } catch (e) {
+    console.error('Error loading column order from localStorage:', e);
+  }
+
+  return initial;
+}
+
 const ColumnWidthContext = createContext(null);
 
 export function ColumnWidthProvider({ children }) {
@@ -320,6 +347,7 @@ export function ColumnWidthProvider({ children }) {
   const [columnLabels, setColumnLabels] = useState(getInitialLabels);
   const [columnAlignments, setColumnAlignments] = useState(getInitialAlign);
   const [columnWrap, setColumnWrap] = useState(getInitialWrap);
+  const [columnOrder, setColumnOrderState] = useState(getInitialOrder);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState('columns');
   const [activeSettingsModule, setActiveSettingsModule] = useState('donhang');
@@ -405,6 +433,15 @@ export function ColumnWidthProvider({ children }) {
       console.error('Error saving column wrap to localStorage:', e);
     }
   }, [columnWrap]);
+
+  // Persist columnOrder
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_ORDER, JSON.stringify(columnOrder));
+    } catch (e) {
+      console.error('Error saving column order to localStorage:', e);
+    }
+  }, [columnOrder]);
 
   // Update a single column's width
   const updateColumnWidth = useCallback((moduleId, colKey, width) => {
@@ -625,11 +662,152 @@ export function ColumnWidthProvider({ children }) {
     });
   }, []);
 
-  // Reset module completely (widths, visibility, labels, align, wrap)
+  // Get ordered columns config array for a module
+  const getOrderedColumns = useCallback(
+    (moduleId) => {
+      const config = MODULE_COLUMNS_CONFIG[moduleId];
+      if (!config) return [];
+      const order = columnOrder[moduleId];
+      if (!order || !order.length) return config.columns;
+
+      const colMap = new Map(config.columns.map((c) => [c.key, c]));
+      const ordered = [];
+      order.forEach((k) => {
+        if (colMap.has(k)) {
+          ordered.push(colMap.get(k));
+          colMap.delete(k);
+        }
+      });
+      colMap.forEach((c) => ordered.push(c));
+      return ordered;
+    },
+    [columnOrder]
+  );
+
+  // Set explicit order array of keys
+  const setColumnOrder = useCallback((moduleId, newOrder) => {
+    setColumnOrderState((prev) => ({
+      ...prev,
+      [moduleId]: Array.isArray(newOrder) ? newOrder : [],
+    }));
+  }, []);
+
+  // Reorder column by index (for Drag & Drop in SettingsModal)
+  const reorderColumn = useCallback((moduleId, sourceIndex, targetIndex) => {
+    setColumnOrderState((prev) => {
+      const config = MODULE_COLUMNS_CONFIG[moduleId];
+      if (!config) return prev;
+      const defaultKeys = config.columns.map((c) => c.key);
+      const currentOrder =
+        prev[moduleId] && prev[moduleId].length ? [...prev[moduleId]] : [...defaultKeys];
+
+      if (
+        sourceIndex < 0 ||
+        sourceIndex >= currentOrder.length ||
+        targetIndex < 0 ||
+        targetIndex >= currentOrder.length ||
+        sourceIndex === targetIndex
+      ) {
+        return prev;
+      }
+
+      const [movedItem] = currentOrder.splice(sourceIndex, 1);
+      currentOrder.splice(targetIndex, 0, movedItem);
+
+      return {
+        ...prev,
+        [moduleId]: currentOrder,
+      };
+    });
+  }, []);
+
+  // Reorder column by key (for Drag & Drop directly on <th>)
+  const reorderColumnByKey = useCallback((moduleId, sourceKey, targetKey) => {
+    if (!sourceKey || !targetKey || sourceKey === targetKey) return;
+    setColumnOrderState((prev) => {
+      const config = MODULE_COLUMNS_CONFIG[moduleId];
+      if (!config) return prev;
+      const defaultKeys = config.columns.map((c) => c.key);
+      const currentOrder =
+        prev[moduleId] && prev[moduleId].length ? [...prev[moduleId]] : [...defaultKeys];
+
+      const sourceIdx = currentOrder.indexOf(sourceKey);
+      const targetIdx = currentOrder.indexOf(targetKey);
+
+      if (sourceIdx === -1 || targetIdx === -1) return prev;
+
+      const [movedItem] = currentOrder.splice(sourceIdx, 1);
+      currentOrder.splice(targetIdx, 0, movedItem);
+
+      return {
+        ...prev,
+        [moduleId]: currentOrder,
+      };
+    });
+  }, []);
+
+  // Move a column up by 1 position
+  const moveColumnUp = useCallback((moduleId, colKey) => {
+    setColumnOrderState((prev) => {
+      const config = MODULE_COLUMNS_CONFIG[moduleId];
+      if (!config) return prev;
+      const defaultKeys = config.columns.map((c) => c.key);
+      const currentOrder =
+        prev[moduleId] && prev[moduleId].length ? [...prev[moduleId]] : [...defaultKeys];
+
+      const idx = currentOrder.indexOf(colKey);
+      if (idx <= 0) return prev;
+
+      const [moved] = currentOrder.splice(idx, 1);
+      currentOrder.splice(idx - 1, 0, moved);
+
+      return {
+        ...prev,
+        [moduleId]: currentOrder,
+      };
+    });
+  }, []);
+
+  // Move a column down by 1 position
+  const moveColumnDown = useCallback((moduleId, colKey) => {
+    setColumnOrderState((prev) => {
+      const config = MODULE_COLUMNS_CONFIG[moduleId];
+      if (!config) return prev;
+      const defaultKeys = config.columns.map((c) => c.key);
+      const currentOrder =
+        prev[moduleId] && prev[moduleId].length ? [...prev[moduleId]] : [...defaultKeys];
+
+      const idx = currentOrder.indexOf(colKey);
+      if (idx === -1 || idx >= currentOrder.length - 1) return prev;
+
+      const [moved] = currentOrder.splice(idx, 1);
+      currentOrder.splice(idx + 1, 0, moved);
+
+      return {
+        ...prev,
+        [moduleId]: currentOrder,
+      };
+    });
+  }, []);
+
+  // Reset column order for a module back to default
+  const resetColumnOrder = useCallback((moduleId) => {
+    setColumnOrderState((prev) => {
+      const config = MODULE_COLUMNS_CONFIG[moduleId];
+      const defaultKeys = config ? config.columns.map((c) => c.key) : [];
+      return {
+        ...prev,
+        [moduleId]: defaultKeys,
+      };
+    });
+  }, []);
+
+  // Reset module completely (widths, visibility, labels, align, wrap, order)
   const resetModuleAll = useCallback(
     (moduleId) => {
       resetModuleWidths(moduleId);
       showAllColumns(moduleId);
+      resetColumnOrder(moduleId);
       setColumnLabels((prev) => ({
         ...prev,
         [moduleId]: {},
@@ -643,16 +821,18 @@ export function ColumnWidthProvider({ children }) {
         [moduleId]: {},
       }));
     },
-    [resetModuleWidths, showAllColumns]
+    [resetModuleWidths, showAllColumns, resetColumnOrder]
   );
 
   // Reset everything across all modules
   const resetAllConfig = useCallback(() => {
     const defWidths = {};
     const defVis = {};
+    const defOrder = {};
     Object.keys(MODULE_COLUMNS_CONFIG).forEach((modKey) => {
       defWidths[modKey] = {};
       defVis[modKey] = {};
+      defOrder[modKey] = MODULE_COLUMNS_CONFIG[modKey].columns.map((c) => c.key);
       MODULE_COLUMNS_CONFIG[modKey].columns.forEach((c) => {
         defWidths[modKey][c.key] = c.defaultWidth;
         defVis[modKey][c.key] = true;
@@ -660,9 +840,15 @@ export function ColumnWidthProvider({ children }) {
     });
     setColumnWidths(defWidths);
     setColumnVisibility(defVis);
+    setColumnOrderState(defOrder);
     setColumnLabels({});
     setColumnAlignments({});
     setColumnWrap({});
+    try {
+      localStorage.removeItem(STORAGE_KEY_ORDER);
+    } catch (e) {
+      console.error(e);
+    }
   }, []);
 
   // Helper returning style object for <td> cells
@@ -711,6 +897,14 @@ export function ColumnWidthProvider({ children }) {
     columnLabels,
     columnAlignments,
     columnWrap,
+    columnOrder,
+    getOrderedColumns,
+    setColumnOrder,
+    reorderColumn,
+    reorderColumnByKey,
+    moveColumnUp,
+    moveColumnDown,
+    resetColumnOrder,
     updateColumnWidth,
     getColumnWidth,
     isColumnVisible,

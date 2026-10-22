@@ -73,16 +73,21 @@ function extractOcrCandidates(rawText) {
 export default function HHShopDienPage() {
   const { user } = useAuth();
   const { showToast } = useToast();
-  const { getColumnWidth, isColumnVisible } = useColumnWidths();
+  const { getColumnWidth, isColumnVisible, getOrderedColumns, getColStyle } = useColumnWidths();
   const todayStr = toYMD(new Date());
 
+  const orderedColumns = useMemo(() => {
+    return getOrderedColumns ? getOrderedColumns('hh_shop_dien') : [];
+  }, [getOrderedColumns]);
+
   const colStyle = useCallback(
-    (key, defaultW) => {
+    (key, defaultW, defAlign) => {
+      if (getColStyle) return getColStyle('hh_shop_dien', key, defaultW, defAlign);
       if (!isColumnVisible('hh_shop_dien', key)) return { display: 'none' };
       const w = getColumnWidth('hh_shop_dien', key, defaultW);
       return { width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` };
     },
-    [getColumnWidth, isColumnVisible]
+    [getColumnWidth, isColumnVisible, getColStyle]
   );
 
   // Raw data from Google Sheets
@@ -846,6 +851,253 @@ export default function HHShopDienPage() {
     showToast('Đã xuất Excel đối soát thành công!', 'success');
   };
 
+  // Render individual cell based on dynamic columnKey
+  const renderCell = (colKey, item, kho, firstKhoPhoto) => {
+    switch (colKey) {
+      case 'ngay_tra':
+        return (
+          <td
+            key={colKey}
+            className="px-3 py-2 text-center text-slate-600 font-medium whitespace-nowrap overflow-hidden text-ellipsis"
+            style={colStyle('ngay_tra', 100, 'center')}
+          >
+            {formatYmdToDmy(item.ngay_tra) || item.ngay_tra || '-'}
+          </td>
+        );
+
+      case 'doi_soat':
+        return (
+          <td
+            key={colKey}
+            className="px-3 py-2 text-center whitespace-nowrap overflow-hidden text-ellipsis"
+            style={colStyle('doi_soat', 135, 'center')}
+          >
+            {item.doi_soat_status === 'DA_NHAN' ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                Đã nhận kho
+              </span>
+            ) : item.doi_soat_status === 'LECH_HANG' ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                Lệch SKU
+              </span>
+            ) : item.is_overdue ? (
+              <span
+                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200"
+                title={`Đã chờ ${item.days_waiting} ngày kể từ ngày sàn trả`}
+              >
+                <Clock className="w-3.5 h-3.5 text-rose-600" />
+                Quá hạn ({item.days_waiting}d)
+              </span>
+            ) : (
+              <span
+                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200"
+                title={`Đã chờ ${item.days_waiting} ngày`}
+              >
+                <Clock className="w-3.5 h-3.5 text-amber-600" />
+                Chưa nhận ({item.days_waiting}d)
+              </span>
+            )}
+          </td>
+        );
+
+      case 'mvd':
+        return (
+          <td
+            key={colKey}
+            className="px-3 py-2 text-left font-bold font-mono text-slate-900 whitespace-nowrap overflow-hidden text-ellipsis"
+            style={colStyle('mvd', 160, 'left')}
+            title={item.mvd}
+          >
+            {item.mvd}
+          </td>
+        );
+
+      case 'mdh':
+        return (
+          <td
+            key={colKey}
+            className="px-3 py-2 text-left font-mono text-slate-700 whitespace-nowrap overflow-hidden text-ellipsis"
+            style={colStyle('mdh', 150, 'left')}
+            title={item.mdh}
+          >
+            {item.mdh || '-'}
+          </td>
+        );
+
+      case 'ma_gian':
+        return (
+          <td
+            key={colKey}
+            className="px-3 py-2 text-center font-bold text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis"
+            style={colStyle('ma_gian', 90, 'center')}
+          >
+            {item.ma_gian || '-'}
+          </td>
+        );
+
+      case 'sku':
+        return (
+          <td
+            key={colKey}
+            className="px-3 py-2 text-left text-indigo-700 font-bold font-mono whitespace-nowrap overflow-hidden text-ellipsis"
+            style={colStyle('sku', 130, 'left')}
+            title={item.sku}
+          >
+            {item.sku || '-'}
+          </td>
+        );
+
+      case 'ten_sp':
+        return (
+          <td
+            key={colKey}
+            className="px-3 py-2 text-left text-slate-600 truncate overflow-hidden text-ellipsis"
+            style={colStyle('ten_sp', 180, 'left')}
+            title={item.ten_sp}
+          >
+            {item.ten_sp || '-'}
+          </td>
+        );
+
+      case 'mvd_tra':
+        return (
+          <td
+            key={colKey}
+            className="px-3 py-2 text-left font-mono text-slate-600 whitespace-nowrap overflow-hidden text-ellipsis"
+            style={colStyle('mvd_tra', 150, 'left')}
+            title={item.mvd_tra}
+          >
+            {item.mvd_tra || '-'}
+          </td>
+        );
+
+      case 'sku_tra':
+        return (
+          <td
+            key={colKey}
+            className="px-3 py-2 text-left font-mono text-slate-700 whitespace-nowrap overflow-hidden text-ellipsis"
+            style={colStyle('sku_tra', 120, 'left')}
+            title={item.sku_tra}
+          >
+            {item.sku_tra || '-'}
+          </td>
+        );
+
+      case 'sl':
+        return (
+          <td
+            key={colKey}
+            className="px-3 py-2 text-right font-mono font-bold text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis"
+            style={colStyle('sl', 65, 'right')}
+          >
+            {item.sl || '1'}
+          </td>
+        );
+
+      case 'hoan_tra':
+        return (
+          <td
+            key={colKey}
+            className="px-3 py-2 text-center whitespace-nowrap overflow-hidden text-ellipsis"
+            style={colStyle('hoan_tra', 75, 'center')}
+          >
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
+              {item.hoan_tra}
+            </span>
+          </td>
+        );
+
+      case 'kho_nhan':
+        return (
+          <td
+            key={colKey}
+            className="px-3 py-2 text-left whitespace-nowrap overflow-hidden text-ellipsis"
+            style={colStyle('kho_nhan', 160, 'left')}
+          >
+            {kho ? (
+              <div className="flex flex-col text-[11px]">
+                <span className="font-semibold text-slate-900" title={kho.sku_ct || kho.sku}>
+                  {kho.sku_ct || kho.sku || 'Đã nhận'}
+                </span>
+                <span className="text-slate-400 text-[10px]">
+                  {kho.kho ? `[${kho.kho}] ` : ''}{formatYmdToDmy(kho.ngay_nhan) || kho.ngay_nhan || ''} {kho.id_nv ? `(${kho.id_nv})` : ''}
+                </span>
+              </div>
+            ) : (
+              <span className="text-slate-400 italic">Chưa nhận</span>
+            )}
+          </td>
+        );
+
+      case 'kho_anh':
+        return (
+          <td
+            key={colKey}
+            className="px-3 py-2 text-center whitespace-nowrap overflow-hidden text-ellipsis"
+            style={colStyle('kho_anh', 75, 'center')}
+          >
+            {firstKhoPhoto ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPreviewImage(firstKhoPhoto);
+                }}
+                className="p-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 transition-colors"
+                title="Xem ảnh bóc hàng của kho"
+              >
+                <ImageIcon className="w-4 h-4" />
+              </button>
+            ) : (
+              <span className="text-slate-300">-</span>
+            )}
+          </td>
+        );
+
+      case 'anh':
+        return (
+          <td
+            key={colKey}
+            className="px-3 py-2 text-center whitespace-nowrap overflow-hidden text-ellipsis"
+            style={colStyle('anh', 75, 'center')}
+          >
+            {item.anh ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPreviewImage(item.anh);
+                }}
+                className="p-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 transition-colors"
+                title="Xem ảnh shop đính kèm"
+              >
+                <ImageIcon className="w-4 h-4" />
+              </button>
+            ) : (
+              <span className="text-slate-300">-</span>
+            )}
+          </td>
+        );
+
+      case 'ghi_chu':
+        return (
+          <td
+            key={colKey}
+            className="px-3 py-2 text-left text-slate-500 truncate overflow-hidden text-ellipsis"
+            style={colStyle('ghi_chu', 150, 'left')}
+            title={item.ghi_chu}
+          >
+            {item.ghi_chu || '-'}
+          </td>
+        );
+
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* 1. THẺ THỐNG KÊ KPI ĐỐI SOÁT */}
@@ -1061,27 +1313,23 @@ export default function HHShopDienPage() {
           <table className="w-full text-left border-collapse text-xs">
             <thead className="bg-slate-100/90 backdrop-blur-xs text-slate-700 font-bold uppercase sticky top-0 z-10 whitespace-nowrap select-none shadow-2xs">
               <tr>
-                <ResizableTh moduleId="hh_shop_dien" columnKey="ngay_tra" defaultWidth={100} align="center">Ngày trả sàn</ResizableTh>
-                <ResizableTh moduleId="hh_shop_dien" columnKey="doi_soat" defaultWidth={135} align="center">Trạng thái kho</ResizableTh>
-                <ResizableTh moduleId="hh_shop_dien" columnKey="mvd" defaultWidth={160} align="left">Mã vận đơn</ResizableTh>
-                <ResizableTh moduleId="hh_shop_dien" columnKey="mdh" defaultWidth={150} align="left">Mã đơn hàng</ResizableTh>
-                <ResizableTh moduleId="hh_shop_dien" columnKey="ma_gian" defaultWidth={90} align="center">Mã gian</ResizableTh>
-                <ResizableTh moduleId="hh_shop_dien" columnKey="sku" defaultWidth={130} align="left">SKU Shop</ResizableTh>
-                <ResizableTh moduleId="hh_shop_dien" columnKey="ten_sp" defaultWidth={180} align="left">Tên sản phẩm</ResizableTh>
-                <ResizableTh moduleId="hh_shop_dien" columnKey="mvd_tra" defaultWidth={150} align="left">MVD Hoàn</ResizableTh>
-                <ResizableTh moduleId="hh_shop_dien" columnKey="sku_tra" defaultWidth={120} align="left">SKU Hoàn</ResizableTh>
-                <ResizableTh moduleId="hh_shop_dien" columnKey="sl" defaultWidth={65} align="right">SL</ResizableTh>
-                <ResizableTh moduleId="hh_shop_dien" columnKey="hoan_tra" defaultWidth={75} align="center">Loại</ResizableTh>
-                <ResizableTh moduleId="hh_shop_dien" columnKey="kho_nhan" defaultWidth={160} align="left">Kho thực tế</ResizableTh>
-                <ResizableTh moduleId="hh_shop_dien" columnKey="kho_anh" defaultWidth={75} align="center">Ảnh kho</ResizableTh>
-                <ResizableTh moduleId="hh_shop_dien" columnKey="anh" defaultWidth={75} align="center">Ảnh shop</ResizableTh>
-                <ResizableTh moduleId="hh_shop_dien" columnKey="ghi_chu" defaultWidth={150} align="left">Ghi chú</ResizableTh>
+                {orderedColumns.map((col) => (
+                  <ResizableTh
+                    key={col.key}
+                    moduleId="hh_shop_dien"
+                    columnKey={col.key}
+                    defaultWidth={col.defaultWidth}
+                    align={col.align}
+                  >
+                    {col.label}
+                  </ResizableTh>
+                ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan={15} className="text-center py-12 text-slate-400">
+                  <td colSpan={orderedColumns.length || 15} className="text-center py-12 text-slate-400">
                     Không tìm thấy dữ liệu phù hợp với bộ lọc.
                   </td>
                 </tr>
@@ -1097,199 +1345,9 @@ export default function HHShopDienPage() {
                       className="hover:bg-slate-50 transition-colors cursor-pointer whitespace-nowrap"
                       title="Nhấn đúp để chỉnh sửa"
                     >
-                      {/* Ngày trả sàn */}
-                      <td
-                        className="px-3 py-2 text-center text-slate-600 font-medium whitespace-nowrap overflow-hidden text-ellipsis"
-                        style={colStyle('ngay_tra', 100)}
-                      >
-                        {formatYmdToDmy(item.ngay_tra) || item.ngay_tra || '-'}
-                      </td>
-
-                      {/* Trạng thái đối soát */}
-                      <td
-                        className="px-3 py-2 text-center whitespace-nowrap overflow-hidden text-ellipsis"
-                        style={colStyle('doi_soat', 135)}
-                      >
-                        {item.doi_soat_status === 'DA_NHAN' ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                            Đã nhận kho
-                          </span>
-                        ) : item.doi_soat_status === 'LECH_HANG' ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                            <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-                            Lệch SKU
-                          </span>
-                        ) : item.is_overdue ? (
-                          <span
-                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200"
-                            title={`Đã chờ ${item.days_waiting} ngày kể từ ngày sàn trả`}
-                          >
-                            <Clock className="w-3.5 h-3.5 text-rose-600" />
-                            Quá hạn ({item.days_waiting}d)
-                          </span>
-                        ) : (
-                          <span
-                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200"
-                            title={`Đã chờ ${item.days_waiting} ngày`}
-                          >
-                            <Clock className="w-3.5 h-3.5 text-amber-600" />
-                            Chưa nhận ({item.days_waiting}d)
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Mã vận đơn */}
-                      <td
-                        className="px-3 py-2 text-left font-bold font-mono text-slate-900 whitespace-nowrap overflow-hidden text-ellipsis"
-                        style={colStyle('mvd', 160)}
-                        title={item.mvd}
-                      >
-                        {item.mvd}
-                      </td>
-
-                      {/* Mã đơn hàng */}
-                      <td
-                        className="px-3 py-2 text-left font-mono text-slate-700 whitespace-nowrap overflow-hidden text-ellipsis"
-                        style={colStyle('mdh', 150)}
-                        title={item.mdh}
-                      >
-                        {item.mdh || '-'}
-                      </td>
-
-                      {/* Mã gian */}
-                      <td
-                        className="px-3 py-2 text-center font-bold text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis"
-                        style={colStyle('ma_gian', 90)}
-                      >
-                        {item.ma_gian || '-'}
-                      </td>
-
-                      {/* SKU Shop */}
-                      <td
-                        className="px-3 py-2 text-left text-indigo-700 font-bold font-mono whitespace-nowrap overflow-hidden text-ellipsis"
-                        style={colStyle('sku', 130)}
-                        title={item.sku}
-                      >
-                        {item.sku || '-'}
-                      </td>
-
-                      {/* Tên sản phẩm */}
-                      <td
-                        className="px-3 py-2 text-left text-slate-600 truncate overflow-hidden text-ellipsis"
-                        style={colStyle('ten_sp', 180)}
-                        title={item.ten_sp}
-                      >
-                        {item.ten_sp || '-'}
-                      </td>
-
-                      {/* MVD Trả */}
-                      <td
-                        className="px-3 py-2 text-left font-mono text-slate-600 whitespace-nowrap overflow-hidden text-ellipsis"
-                        style={colStyle('mvd_tra', 150)}
-                        title={item.mvd_tra}
-                      >
-                        {item.mvd_tra || '-'}
-                      </td>
-
-                      {/* SKU Trả */}
-                      <td
-                        className="px-3 py-2 text-left font-mono text-slate-700 whitespace-nowrap overflow-hidden text-ellipsis"
-                        style={colStyle('sku_tra', 120)}
-                        title={item.sku_tra}
-                      >
-                        {item.sku_tra || '-'}
-                      </td>
-
-                      {/* Số lượng */}
-                      <td
-                        className="px-3 py-2 text-right font-mono font-bold text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis"
-                        style={colStyle('sl', 65)}
-                      >
-                        {item.sl || '1'}
-                      </td>
-
-                      {/* Loại (Hoàn / Trả) */}
-                      <td
-                        className="px-3 py-2 text-center whitespace-nowrap overflow-hidden text-ellipsis"
-                        style={colStyle('hoan_tra', 75)}
-                      >
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
-                          {item.hoan_tra}
-                        </span>
-                      </td>
-
-                      {/* Kho thực tế */}
-                      <td
-                        className="px-3 py-2 text-left whitespace-nowrap overflow-hidden text-ellipsis"
-                        style={colStyle('kho_nhan', 160)}
-                      >
-                        {kho ? (
-                          <div className="flex flex-col text-[11px]">
-                            <span className="font-semibold text-slate-900" title={kho.sku_ct || kho.sku}>
-                              {kho.sku_ct || kho.sku || 'Đã nhận'}
-                            </span>
-                            <span className="text-slate-400 text-[10px]">
-                              {kho.kho ? `[${kho.kho}] ` : ''}{formatYmdToDmy(kho.ngay_nhan) || kho.ngay_nhan || ''} {kho.id_nv ? `(${kho.id_nv})` : ''}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-slate-400 italic">Chưa nhận</span>
-                        )}
-                      </td>
-
-                      {/* Ảnh kho nhận */}
-                      <td
-                        className="px-3 py-2 text-center whitespace-nowrap overflow-hidden text-ellipsis"
-                        style={colStyle('kho_anh', 75)}
-                      >
-                        {firstKhoPhoto ? (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPreviewImage(firstKhoPhoto);
-                            }}
-                            className="p-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 transition-colors"
-                            title="Xem ảnh bóc hàng của kho"
-                          >
-                            <ImageIcon className="w-4 h-4" />
-                          </button>
-                        ) : (
-                          <span className="text-slate-300">-</span>
-                        )}
-                      </td>
-
-                      {/* Ảnh shop đính kèm */}
-                      <td
-                        className="px-3 py-2 text-center whitespace-nowrap overflow-hidden text-ellipsis"
-                        style={colStyle('anh', 75)}
-                      >
-                        {item.anh ? (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPreviewImage(item.anh);
-                            }}
-                            className="p-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 transition-colors"
-                            title="Xem ảnh shop đính kèm"
-                          >
-                            <ImageIcon className="w-4 h-4" />
-                          </button>
-                        ) : (
-                          <span className="text-slate-300">-</span>
-                        )}
-                      </td>
-
-                      {/* Ghi chú */}
-                      <td
-                        className="px-3 py-2 text-left text-slate-500 truncate overflow-hidden text-ellipsis"
-                        style={colStyle('ghi_chu', 150)}
-                        title={item.ghi_chu}
-                      >
-                        {item.ghi_chu || '-'}
-                      </td>
+                      {orderedColumns.map((col) =>
+                        renderCell(col.key, item, kho, firstKhoPhoto)
+                      )}
                     </tr>
                   );
                 })

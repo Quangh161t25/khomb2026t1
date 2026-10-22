@@ -24,6 +24,10 @@ import {
   AlignCenter,
   AlignRight,
   WrapText,
+  GripVertical,
+  ChevronUp,
+  ChevronDown,
+  MoveVertical,
 } from 'lucide-react';
 
 export default function SettingsModal() {
@@ -38,6 +42,12 @@ export default function SettingsModal() {
     columnLabels,
     columnAlignments,
     columnWrap,
+    columnOrder,
+    getOrderedColumns,
+    reorderColumn,
+    moveColumnUp,
+    moveColumnDown,
+    resetColumnOrder,
     updateColumnWidth,
     resetModuleWidths,
     resetModuleAll,
@@ -61,19 +71,51 @@ export default function SettingsModal() {
   } = useColumnWidths();
 
   const [searchColumn, setSearchColumn] = useState('');
+  const [draggedColIdx, setDraggedColIdx] = useState(null);
+  const [dragOverColIdx, setDragOverColIdx] = useState(null);
 
   const currentModuleConfig =
     MODULE_COLUMNS_CONFIG[activeSettingsModule] || MODULE_COLUMNS_CONFIG.donhang;
 
-  // Filter columns by search term
+  // Filter columns by search term, respecting the customized column order
   const filteredColumns = useMemo(() => {
     if (!currentModuleConfig) return [];
-    if (!searchColumn.trim()) return currentModuleConfig.columns;
+    const ordered = getOrderedColumns ? getOrderedColumns(activeSettingsModule) : currentModuleConfig.columns;
+    if (!searchColumn.trim()) return ordered;
     const term = searchColumn.trim().toLowerCase();
-    return currentModuleConfig.columns.filter(
+    return ordered.filter(
       (c) => c.label.toLowerCase().includes(term) || c.key.toLowerCase().includes(term)
     );
-  }, [currentModuleConfig, searchColumn]);
+  }, [currentModuleConfig, activeSettingsModule, getOrderedColumns, searchColumn]);
+
+  // Drag & drop handlers for rows
+  const handleRowDragStart = (e, index) => {
+    setDraggedColIdx(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(index));
+  };
+
+  const handleRowDragOver = (e, index) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverColIdx !== index) {
+      setDragOverColIdx(index);
+    }
+  };
+
+  const handleRowDrop = (e, dropIndex) => {
+    e.preventDefault();
+    if (draggedColIdx !== null && draggedColIdx !== dropIndex) {
+      reorderColumn(activeSettingsModule, draggedColIdx, dropIndex);
+    }
+    setDraggedColIdx(null);
+    setDragOverColIdx(null);
+  };
+
+  const handleRowDragEnd = () => {
+    setDraggedColIdx(null);
+    setDragOverColIdx(null);
+  };
 
   if (!isSettingsOpen) return null;
 
@@ -169,9 +211,12 @@ export default function SettingsModal() {
               <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-3 flex items-start gap-2.5 text-xs text-blue-900">
                 <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                 <div className="space-y-0.5">
-                  <p className="font-bold">Đồng bộ kích thước cột tức thì:</p>
+                  <p className="font-bold flex items-center gap-1.5">
+                    <span>Đồng bộ kích thước & di chuyển vị trí cột tức thì:</span>
+                    <span className="text-[10px] bg-blue-200/80 text-blue-800 px-1.5 py-0.2 rounded font-bold">Mới: Kéo thả</span>
+                  </p>
                   <p className="text-blue-800 text-[11px]">
-                    Khi bạn <strong>kéo chuột chỉnh cột trên bảng</strong>, thông số ở bảng bên dưới sẽ tự động nhảy số theo. Ngược lại, bạn cũng có thể nhập trực tiếp số pixel hoặc kéo thanh trượt tại đây để chỉnh độ rộng. Mọi thay đổi được lưu tự động trên máy tính của bạn.
+                    Giữ chuột ở cột <strong>STT (biểu tượng ⠿)</strong> rồi kéo lên/xuống để đổi thứ tự cột (hoặc bấm mũi tên ▲/▼). Bạn cũng có thể kéo chuột chỉnh độ rộng trực tiếp trên bảng. Mọi thay đổi được lưu tự động trên máy tính của bạn.
                   </p>
                 </div>
               </div>
@@ -244,7 +289,15 @@ export default function SettingsModal() {
                   <table className="w-full text-left border-collapse text-xs">
                     <thead className="bg-slate-100 text-slate-700 font-bold uppercase sticky top-0 z-10 select-none shadow-xs">
                       <tr>
-                        <th className="px-2.5 py-2.5 w-10 text-center">STT</th>
+                        <th
+                          className="px-2 py-2.5 w-16 text-center select-none"
+                          title="Kéo thả dòng hoặc bấm mũi tên ở cột STT (⠿) để đổi thứ tự cột"
+                        >
+                          <div className="flex items-center justify-center gap-1 text-slate-700">
+                            <MoveVertical className="w-3.5 h-3.5 text-blue-600" />
+                            <span>STT</span>
+                          </div>
+                        </th>
                         <th className="px-2 py-2.5 w-16 text-center" title="Tích để hiển thị, bỏ tích để ẩn cột trên bảng">
                           Hiển thị
                         </th>
@@ -286,16 +339,63 @@ export default function SettingsModal() {
                         return (
                           <tr
                             key={col.key}
-                            className={`hover:bg-slate-50 transition-colors ${
-                              !isVisible
+                            draggable={!searchColumn.trim()}
+                            onDragStart={(e) => handleRowDragStart(e, idx)}
+                            onDragOver={(e) => handleRowDragOver(e, idx)}
+                            onDrop={(e) => handleRowDrop(e, idx)}
+                            onDragEnd={handleRowDragEnd}
+                            className={`transition-all ${
+                              draggedColIdx === idx
+                                ? 'opacity-30 bg-blue-100/70 border-2 border-dashed border-blue-500'
+                                : dragOverColIdx === idx
+                                ? draggedColIdx !== null && draggedColIdx < idx
+                                  ? 'border-b-2 border-b-blue-600 bg-blue-50/70'
+                                  : 'border-t-2 border-t-blue-600 bg-blue-50/70'
+                                : !isVisible
                                 ? 'bg-slate-50/60 opacity-60'
                                 : isModified
                                 ? 'bg-blue-50/20'
-                                : ''
+                                : 'hover:bg-slate-50'
                             }`}
                           >
-                            {/* 1. STT */}
-                            <td className="px-2.5 py-2 text-center text-slate-400 font-medium">{idx + 1}</td>
+                            {/* 1. STT: Drag Handle + Number + Up/Down arrows */}
+                            <td
+                              className="px-1 py-2 text-center text-slate-500 font-medium select-none cursor-grab active:cursor-grabbing group/drag"
+                              title="Giữ chuột và kéo thả để di chuyển vị trí cột (hoặc bấm mũi tên ▲/▼)"
+                            >
+                              <div className="flex items-center justify-center gap-0.5">
+                                <GripVertical className="w-4 h-4 text-slate-400 group-hover/drag:text-blue-600 transition-colors shrink-0" />
+                                <span className="w-4 text-center font-bold text-slate-700 text-xs font-mono">
+                                  {idx + 1}
+                                </span>
+                                <div className="flex flex-col -space-y-1 ml-0.5 opacity-60 group-hover/drag:opacity-100 transition-opacity">
+                                  <button
+                                    type="button"
+                                    disabled={idx === 0}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      moveColumnUp(activeSettingsModule, col.key);
+                                    }}
+                                    className="text-slate-400 hover:text-blue-600 disabled:opacity-10 p-0.5 rounded cursor-pointer leading-none"
+                                    title="Chuyển cột này lên trên"
+                                  >
+                                    <ChevronUp className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={idx === filteredColumns.length - 1}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      moveColumnDown(activeSettingsModule, col.key);
+                                    }}
+                                    className="text-slate-400 hover:text-blue-600 disabled:opacity-10 p-0.5 rounded cursor-pointer leading-none"
+                                    title="Chuyển cột này xuống dưới"
+                                  >
+                                    <ChevronDown className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              </div>
+                            </td>
 
                             {/* 2. Checkbox Hiển thị */}
                             <td className="px-2 py-2 text-center">
@@ -513,9 +613,19 @@ export default function SettingsModal() {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
+                    onClick={() => resetColumnOrder(activeSettingsModule)}
+                    className="px-3 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors flex items-center gap-1.5"
+                    title="Khôi phục lại thứ tự cột ban đầu của modul này"
+                  >
+                    <MoveVertical className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Khôi phục thứ tự</span>
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => resetModuleAll(activeSettingsModule)}
                     className="px-3 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors flex items-center gap-1.5"
-                    title="Khôi phục độ rộng, hiển thị tất cả và xóa tên thay thế của modul này"
+                    title="Khôi phục độ rộng, thứ tự, hiển thị tất cả và xóa tên thay thế của modul này"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
                     <span>Đặt lại mặc định modul này</span>
