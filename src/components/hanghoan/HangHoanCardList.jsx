@@ -20,7 +20,7 @@ export default function HangHoanCardList({
 
   const handleCopyText = async (e, text, rowKey) => {
     e.stopPropagation();
-    const val = (text || '').toString().trim();
+    const val = (text || '').toString().trim().replace(/[\r\n\t]/g, '');
     if (!val) return;
     try {
       if (navigator?.clipboard?.writeText) {

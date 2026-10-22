@@ -60,7 +60,7 @@ export default function HangHoanDrawer({
   const [copiedMvd2, setCopiedMvd2] = useState(false);
 
   const handleCopyMvd2 = async () => {
-    const val = (mvd2 || '').trim();
+    const val = (mvd2 || '').trim().replace(/[\r\n\t]/g, '');
     if (!val) return;
     try {
       if (navigator?.clipboard?.writeText) {
@@ -366,20 +366,21 @@ export default function HangHoanDrawer({
     if (isOpen) {
       if (mode === 'edit' || mode === 'copy') {
         setMvd(mode === 'copy' ? '' : initialData.mvd || '');
-        setMvd2(mode === 'copy' ? '' : initialData.mvd_2 || '');
+        // Khi mode === 'copy': chỉ để lại chuỗi forward (MVD 2)
+        setMvd2(initialData.mvd_2 || (mode === 'copy' ? initialData.mvd || '' : ''));
         setMaGian(initialData.ma_gian || '');
-        setSku(initialData.sku || '');
+        setSku(mode === 'copy' ? '' : initialData.sku || '');
         setSkuCt(mode === 'copy' ? '' : initialData.sku_ct || '');
         setSlg(parseFloat(initialData.slg) || 1);
         setHoanTra(initialData.trang_thai || 'Hoàn');
         setKho(initialData.kho || 'KHO');
-        setTinhTrang(initialData.tinh_trang || '');
-        setTenSp(initialData.ten_sp || '');
-        setNgayNhan(initialData.ngay_nhan || getTodayYmd());
-        setMdh(initialData.id_dh || '');
-        setAnh1(initialData.anh_1 || '');
-        setAnh2(initialData.anh_2 || '');
-        setAnh3(initialData.anh_3 || '');
+        setTinhTrang(mode === 'copy' ? '' : (initialData.tinh_trang || ''));
+        setTenSp(mode === 'copy' ? '' : initialData.ten_sp || '');
+        setNgayNhan(mode === 'copy' ? getTodayYmd() : (initialData.ngay_nhan || getTodayYmd()));
+        setMdh(mode === 'copy' ? '' : initialData.id_dh || '');
+        setAnh1(mode === 'copy' ? '' : initialData.anh_1 || '');
+        setAnh2(mode === 'copy' ? '' : initialData.anh_2 || '');
+        setAnh3(mode === 'copy' ? '' : initialData.anh_3 || '');
         setHistoryText('');
       } else {
         // mode === 'create'

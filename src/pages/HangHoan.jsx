@@ -314,16 +314,26 @@ export default function HangHoanPage() {
       showToast('Tài khoản KINHDOANH không được sao chép Dữ liệu Hàng hoàn.', 'warning');
       return;
     }
+    const forwardCode = (item?.mvd_2 || item?.mvd || '').trim();
     setSelectedItem({
       ...item,
       id: '',
       rowIndex: null,
+      mvd: '',
+      mvd_2: forwardCode,
       sku: '',
       sku_ct: '',
+      ten_sp: '',
+      tinh_trang: '',
       ghi_chu: '',
+      anh_1: '',
+      anh_2: '',
+      anh_3: '',
+      ngay_nhan: todayStr,
     });
-    setDrawerMode('create');
-    showToast('Đã sao chép dữ liệu hàng hoàn. SKU CT được để trống.', 'info');
+    setDrawerMode('copy');
+    setIsDrawerOpen(true);
+    showToast(`Đã sao chép: Chỉ giữ lại chuỗi Forward (${forwardCode || 'Trống'}).`, 'info');
   };
 
   // Handle Save (Create or Edit)
@@ -332,7 +342,7 @@ export default function HangHoanPage() {
     const nowStr = formatDateTimeNow();
     const editorName = user?.name ? `${user.name} (${user.id})` : user?.id || 'User';
 
-    if (drawerMode === 'create') {
+    if (drawerMode === 'create' || drawerMode === 'copy') {
       if (isKinhDoanh) {
         showToast('Tài khoản KINHDOANH không được thêm mới.', 'error');
         return;
