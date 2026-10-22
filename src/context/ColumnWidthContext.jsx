@@ -134,6 +134,7 @@ export const MODULE_COLUMNS_CONFIG = {
       { key: 'hoan_tra', label: 'Loại', defaultWidth: 75, minWidth: 50, align: 'center' },
       { key: 'kho_nhan', label: 'Kho thực tế', defaultWidth: 160, minWidth: 90, align: 'left' },
       { key: 'kho_anh', label: 'Ảnh kho', defaultWidth: 75, minWidth: 50, align: 'center' },
+      { key: 'anh', label: 'Ảnh shop', defaultWidth: 75, minWidth: 50, align: 'center' },
       { key: 'xac_nhan', label: 'Xác nhận', defaultWidth: 100, minWidth: 60, align: 'center' },
       { key: 'ghi_chu', label: 'Ghi chú', defaultWidth: 150, minWidth: 80, align: 'left' },
     ],

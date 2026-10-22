@@ -12,10 +12,12 @@ import {
   batchUpdateSheetValues,
   deleteSheetRow,
 } from '../services/googleSheetsApi';
+import { uploadImage } from '../services/imageUploadService';
 import { exportToExcel } from '../services/excelExport';
 import { toYMD, formatYmdToDmy } from '../utils/dateUtils';
 import { matchMultiKeyword } from '../utils/searchUtils';
 import { useAutoSync } from '../hooks/useAutoSync';
+import Tesseract from 'tesseract.js';
 import {
   Search,
   RotateCw,
@@ -36,9 +38,37 @@ import {
   Layers,
   Sparkles,
   ArrowRight,
-  ShieldCheck,
+  Upload,
+  ScanText,
+  Loader2,
+  Copy,
   ExternalLink
 } from 'lucide-react';
+
+// Helper trích xuất mã tiềm năng từ OCR text
+function extractOcrCandidates(rawText) {
+  if (!rawText) return [];
+  const candidates = new Set();
+  const spxMatches = rawText.match(/SPX[A-Z0-9]{8,25}/gi) || [];
+  spxMatches.forEach((m) => candidates.add(m.trim().toUpperCase()));
+
+  const courierMatches = rawText.match(/(?:GHN|GHTK|JNT|LEX|LZD|VTP|TKM)[A-Z0-9]{5,20}/gi) || [];
+  courierMatches.forEach((m) => candidates.add(m.trim().toUpperCase()));
+
+  const tokenMatches = rawText.match(/\b[A-Za-z0-9_-]{8,26}\b/g) || [];
+  tokenMatches.forEach((token) => {
+    const clean = token.replace(/^[_\-]+|[_\-]+$/g, '').toUpperCase();
+    const digitCount = (clean.match(/\d/g) || []).length;
+    if (clean.length >= 8 && clean.length <= 26 && digitCount >= 2) {
+      candidates.add(clean);
+    }
+  });
+
+  const numericMatches = rawText.match(/\b\d{9,18}\b/g) || [];
+  numericMatches.forEach((num) => candidates.add(num.trim()));
+
+  return Array.from(candidates);
+}
 
 export default function HHShopDienPage() {
   const { user } = useAuth();
@@ -95,23 +125,34 @@ export default function HHShopDienPage() {
     ghi_chu: '',
     xac_nhan: 'ĐÃ XÁC NHẬN',
     nguoi_nhap: user?.name || user?.username || 'Shop',
+    anh: '',
   });
 
   // Suggestion feedback state for auto-lookup
-  const [lookupFeedback, setLookupFeedback] = useState(null); // { type: 'success' | 'not_found', message: '' }
-  const [multiMatches, setMultiMatches] = useState([]); // In case 1 MDH has multiple items
+  const [lookupFeedback, setLookupFeedback] = useState(null);
+  const [matchedOrderItems, setMatchedOrderItems] = useState([]); // All items belonging to current MVD/MDH
+
+  // Image & OCR state
+  const [imageUploading, setImageUploading] = useState(false);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState('');
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState(0);
+  const [ocrCandidates, setOcrCandidates] = useState([]);
+  const [ocrFullText, setOcrFullText] = useState('');
+  const [showOcrBox, setShowOcrBox] = useState(false);
+  const fileInputRef = useRef(null);
 
   // 1. Tải toàn bộ dữ liệu (HH_SHOP_DIEN, HH_BH, UD_CT)
   const loadData = useCallback(async (isSilent = false) => {
     if (!isSilent) setLoading(true);
     try {
       const [shopRows, hhbhRows, udctRows] = await Promise.all([
-        fetchSheetData(`${CONFIG.hhShopDienSheetName}!A:O`),
+        fetchSheetData(`${CONFIG.hhShopDienSheetName}!A:P`),
         fetchSheetData(`${CONFIG.hhbhSheetName}!A:Z`),
         fetchSheetData(`${CONFIG.udctSheetName}!A:R`),
       ]);
 
-      // Parse HH_SHOP_DIEN (15 columns: id, ngay_tao, ngay_tra, mvd, mdh, ma_gian, sku, ten_sp, mvd_tra, sku_tra, sl, hoan_tra, ghi_chu, xac_nhan, nguoi_nhap)
+      // Parse HH_SHOP_DIEN (16 columns: id, ngay_tao, ngay_tra, mvd, mdh, ma_gian, sku, ten_sp, mvd_tra, sku_tra, sl, hoan_tra, ghi_chu, xac_nhan, nguoi_nhap, anh)
       if (shopRows && shopRows.length > 1) {
         const parsedShop = shopRows.slice(1).map((row, idx) => ({
           rowIndex: idx + 2,
@@ -130,6 +171,7 @@ export default function HHShopDienPage() {
           ghi_chu: (row[12] || '').toString().trim(),
           xac_nhan: (row[13] || '').toString().trim(),
           nguoi_nhap: (row[14] || '').toString().trim(),
+          anh: (row[15] || '').toString().trim(),
         }));
         setShopData(parsedShop);
       } else {
@@ -215,25 +257,22 @@ export default function HHShopDienPage() {
       const cleanMvd = (item.mvd || '').toUpperCase();
       const cleanMvdTra = (item.mvd_tra || '').toUpperCase();
 
-      // Tìm kiếm trong kho theo mvd_tra hoặc mvd
       const khoMatch = (cleanMvdTra && hhbhMap.get(cleanMvdTra)) || (cleanMvd && hhbhMap.get(cleanMvd)) || null;
 
-      let status = 'CHO_NHAN'; // CHO_NHAN | DA_NHAN | LECH_HANG
+      let status = 'CHO_NHAN';
       let isOverdue = false;
       let daysWaiting = 0;
 
       if (khoMatch) {
-        // So sánh SKU
         const shopSku = (item.sku_tra || item.sku || '').toUpperCase();
         const khoSku = (khoMatch.sku_ct || khoMatch.sku || '').toUpperCase();
 
         if (shopSku && khoSku && !khoSku.includes(shopSku) && !shopSku.includes(khoSku)) {
-          status = 'LECH_HANG'; // Kho nhận về SKU khác
+          status = 'LECH_HANG';
         } else {
-          status = 'DA_NHAN'; // Trùng khớp
+          status = 'DA_NHAN';
         }
       } else {
-        // Tính số ngày chờ kho nhận
         if (item.ngay_tra) {
           const returnDate = new Date(item.ngay_tra);
           if (!isNaN(returnDate.getTime())) {
@@ -291,7 +330,6 @@ export default function HHShopDienPage() {
         if (maGianFilter && item.ma_gian !== maGianFilter) return false;
         if (xacNhanFilter && item.xac_nhan !== xacNhanFilter) return false;
 
-        // Lọc trạng thái đối soát
         if (doiSoatFilter === 'DA_NHAN' && item.doi_soat_status !== 'DA_NHAN') return false;
         if (doiSoatFilter === 'CHO_NHAN' && item.doi_soat_status !== 'CHO_NHAN') return false;
         if (doiSoatFilter === 'OVERDUE' && (!item.is_overdue || item.doi_soat_status !== 'CHO_NHAN')) return false;
@@ -314,7 +352,7 @@ export default function HHShopDienPage() {
 
     if (!cleanMvd && !cleanMdh) {
       setLookupFeedback(null);
-      setMultiMatches([]);
+      setMatchedOrderItems([]);
       return;
     }
 
@@ -326,42 +364,38 @@ export default function HHShopDienPage() {
       matches = udctData.filter((u) => u.mdh.toLowerCase() === cleanMdh);
     }
 
-    if (matches.length === 1) {
-      const match = matches[0];
-      setFormData((prev) => ({
-        ...prev,
-        mvd: prev.mvd || match.mvd,
-        mdh: prev.mdh || match.mdh,
-        ma_gian: match.ma_gian || prev.ma_gian,
-        sku: match.id_sp_ct || match.id_sp || match.sku_shop_up || prev.sku,
-        ten_sp: match.ten_sp || prev.ten_sp,
-        mvd_tra: prev.mvd_tra || prev.mvd || match.mvd,
-        sku_tra: prev.sku_tra || match.id_sp_ct || match.id_sp || prev.sku,
-      }));
-      setLookupFeedback({
-        type: 'success',
-        message: `Đã tìm thấy đơn hàng: Gian ${match.ma_gian} - SKU: ${match.id_sp_ct || match.id_sp}`,
-      });
-      setMultiMatches([]);
-    } else if (matches.length > 1) {
+    if (matches.length > 0) {
+      setMatchedOrderItems(matches);
       const first = matches[0];
       setFormData((prev) => ({
         ...prev,
         mvd: prev.mvd || first.mvd,
         mdh: prev.mdh || first.mdh,
         ma_gian: first.ma_gian || prev.ma_gian,
+        sku: matches.length === 1 ? (first.id_sp_ct || first.id_sp || first.sku_shop_up) : prev.sku,
+        ten_sp: matches.length === 1 ? first.ten_sp : prev.ten_sp,
+        mvd_tra: prev.mvd_tra || prev.mvd || first.mvd,
+        sku_tra: matches.length === 1 ? (first.id_sp_ct || first.id_sp) : prev.sku_tra,
+        sl: matches.length === 1 ? (first.so_luong || '1') : prev.sl,
       }));
-      setMultiMatches(matches);
-      setLookupFeedback({
-        type: 'multiple',
-        message: `Đơn có ${matches.length} sản phẩm. Vui lòng chọn sản phẩm cần hoàn bên dưới.`,
-      });
+
+      if (matches.length === 1) {
+        setLookupFeedback({
+          type: 'success',
+          message: `Đã tìm thấy đơn hàng: Gian ${first.ma_gian} - SKU: ${first.id_sp_ct || first.id_sp}`,
+        });
+      } else {
+        setLookupFeedback({
+          type: 'multiple',
+          message: `Đơn có ${matches.length} sản phẩm. Tất cả sản phẩm được hiển thị đầy đủ bên dưới.`,
+        });
+      }
     } else {
       setLookupFeedback({
         type: 'not_found',
         message: 'Chưa có trong dữ liệu đơn hàng UD_CT (bạn có thể tự điền các ô bên dưới)',
       });
-      setMultiMatches([]);
+      setMatchedOrderItems([]);
     }
   };
 
@@ -381,25 +415,121 @@ export default function HHShopDienPage() {
     performUdctLookup(formData.mvd, updatedMdh);
   };
 
-  const handleSelectMultiItem = (item) => {
+  const handleSelectOrderItem = (item) => {
+    const targetSku = item.id_sp_ct || item.id_sp || item.sku_shop_up || '';
     setFormData((prev) => ({
       ...prev,
-      sku: item.id_sp_ct || item.id_sp || item.sku_shop_up || prev.sku,
+      sku: targetSku,
       ten_sp: item.ten_sp || prev.ten_sp,
-      sku_tra: item.id_sp_ct || item.id_sp || prev.sku_tra,
+      sku_tra: targetSku,
       sl: item.so_luong || '1',
     }));
-    setLookupFeedback({
-      type: 'success',
-      message: `Đã chọn: ${item.id_sp_ct || item.id_sp} (${item.ten_sp})`,
-    });
+    showToast(`Đã chọn sản phẩm: ${targetSku}`, 'success');
+  };
+
+  // 5. Xử lý ảnh đính kèm: Hỗ trợ Dán (Ctrl + V) và Tải file
+  const handleProcessImageFile = async (file) => {
+    if (!file || !file.type.startsWith('image/')) {
+      showToast('Vui lòng chọn hoặc dán file hình ảnh!', 'warning');
+      return;
+    }
+
+    const localUrl = URL.createObjectURL(file);
+    setImagePreviewUrl(localUrl);
+    setImageUploading(true);
+    setOcrCandidates([]);
+    setOcrFullText('');
+
+    try {
+      const caption = `HH_SHOP: ${formData.mvd || formData.mdh || 'DON_HOAN'}`;
+      const uploadedUrl = await uploadImage(file, { caption });
+      setFormData((prev) => ({ ...prev, anh: uploadedUrl }));
+      showToast('Đã tải ảnh lên thành công!', 'success');
+    } catch (err) {
+      console.error('Lỗi upload ảnh:', err);
+      showToast('Không thể upload ảnh: ' + err.message, 'error');
+    } finally {
+      setImageUploading(false);
+    }
+  };
+
+  // Lắng nghe sự kiện Paste (Ctrl + V) toàn màn hình khi Drawer mở
+  useEffect(() => {
+    if (!isDrawerOpen) return;
+
+    const handlePaste = (e) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+          const file = items[i].getAsFile();
+          if (file) {
+            e.preventDefault();
+            handleProcessImageFile(file);
+            showToast('Đã nhận diện ảnh dán từ Clipboard (Ctrl + V)!', 'info');
+            break;
+          }
+        }
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [isDrawerOpen, formData.mvd, formData.mdh]);
+
+  // 6. Đọc chữ OCR từ ảnh đính kèm
+  const handleRunOcrOnImage = async () => {
+    const imgSource = imagePreviewUrl || formData.anh;
+    if (!imgSource) {
+      showToast('Chưa có ảnh để đọc chữ OCR!', 'warning');
+      return;
+    }
+
+    setOcrLoading(true);
+    setOcrProgress(0);
+    setShowOcrBox(true);
+
+    try {
+      const res = await Tesseract.recognize(imgSource, 'eng', {
+        logger: (m) => {
+          if (m.status === 'recognizing text' && typeof m.progress === 'number') {
+            setOcrProgress(Math.round(m.progress * 100));
+          }
+        },
+      });
+
+      const fullText = (res?.data?.text || '').trim();
+      const candidates = extractOcrCandidates(fullText);
+
+      setOcrFullText(fullText);
+      setOcrCandidates(candidates);
+
+      // Nếu tìm thấy mã vận đơn tiềm năng và ô MVD đang trống, tự động điền luôn
+      if (candidates.length > 0 && !formData.mvd) {
+        handleMvdChange(candidates[0]);
+        showToast(`Đã nhận diện và điền MVD: ${candidates[0]}`, 'success');
+      } else {
+        showToast(`OCR hoàn tất, tìm thấy ${candidates.length} mã khả dụng!`, 'info');
+      }
+    } catch (err) {
+      console.error('OCR Error:', err);
+      showToast('Có lỗi khi đọc chữ OCR: ' + err.message, 'error');
+    } finally {
+      setOcrLoading(false);
+    }
   };
 
   // Mở Drawer thêm mới
   const handleOpenCreate = () => {
     setSelectedItem(null);
     setLookupFeedback(null);
-    setMultiMatches([]);
+    setMatchedOrderItems([]);
+    setImagePreviewUrl('');
+    setOcrCandidates([]);
+    setOcrFullText('');
+    setShowOcrBox(false);
+
     setFormData({
       id: Date.now().toString(),
       ngay_tra: todayStr,
@@ -415,6 +545,7 @@ export default function HHShopDienPage() {
       ghi_chu: '',
       xac_nhan: 'ĐÃ XÁC NHẬN',
       nguoi_nhap: user?.name || user?.username || 'Shop',
+      anh: '',
     });
     setDrawerMode('create');
     setIsDrawerOpen(true);
@@ -424,7 +555,11 @@ export default function HHShopDienPage() {
   const handleOpenEdit = (item) => {
     setSelectedItem(item);
     setLookupFeedback(null);
-    setMultiMatches([]);
+    setOcrCandidates([]);
+    setOcrFullText('');
+    setShowOcrBox(false);
+    setImagePreviewUrl(item.anh || '');
+
     setFormData({
       id: item.id || Date.now().toString(),
       ngay_tra: toYMD(item.ngay_tra) || todayStr,
@@ -440,7 +575,21 @@ export default function HHShopDienPage() {
       ghi_chu: item.ghi_chu || '',
       xac_nhan: item.xac_nhan || 'ĐÃ XÁC NHẬN',
       nguoi_nhap: item.nguoi_nhap || user?.name || '',
+      anh: item.anh || '',
     });
+
+    // Lấy lại danh sách các item trong đơn
+    if (item.mvd || item.mdh) {
+      const cleanMvd = (item.mvd || '').toLowerCase();
+      const cleanMdh = (item.mdh || '').toLowerCase();
+      const matches = udctData.filter(
+        (u) => (cleanMvd && u.mvd.toLowerCase() === cleanMvd) || (cleanMdh && u.mdh.toLowerCase() === cleanMdh)
+      );
+      setMatchedOrderItems(matches);
+    } else {
+      setMatchedOrderItems([]);
+    }
+
     setDrawerMode('edit');
     setIsDrawerOpen(true);
   };
@@ -470,6 +619,7 @@ export default function HHShopDienPage() {
       formData.ghi_chu.trim(),
       formData.xac_nhan || 'ĐÃ XÁC NHẬN',
       formData.nguoi_nhap || user?.name || '',
+      formData.anh || '',
     ];
 
     if (drawerMode === 'create') {
@@ -498,6 +648,7 @@ export default function HHShopDienPage() {
         { range: `${CONFIG.hhShopDienSheetName}!L${rowIndex}`, values: [[formData.hoan_tra]] },
         { range: `${CONFIG.hhShopDienSheetName}!M${rowIndex}`, values: [[formData.ghi_chu]] },
         { range: `${CONFIG.hhShopDienSheetName}!N${rowIndex}`, values: [[formData.xac_nhan]] },
+        { range: `${CONFIG.hhShopDienSheetName}!P${rowIndex}`, values: [[formData.anh || '']] },
       ];
 
       try {
@@ -555,7 +706,6 @@ export default function HHShopDienPage() {
         const parts = clean.split(' ');
         const mainCode = parts[0].toUpperCase();
 
-        // Tra cứu trong UD_CT
         let match = udctData.find((u) => u.mvd.toUpperCase() === mainCode);
         if (!match) {
           match = udctData.find((u) => u.mdh.toUpperCase() === mainCode);
@@ -586,6 +736,7 @@ export default function HHShopDienPage() {
           '',
           'ĐÃ XÁC NHẬN',
           user?.name || 'Shop',
+          '',
         ]);
       });
 
@@ -624,6 +775,7 @@ export default function HHShopDienPage() {
       'SKU kho nhận',
       'Xác nhận',
       'Ghi chú',
+      'Link ảnh',
     ];
     const rows = filteredData.map((r) => [
       formatYmdToDmy(r.ngay_tra) || r.ngay_tra,
@@ -647,6 +799,7 @@ export default function HHShopDienPage() {
       r.kho_match?.sku_ct || r.kho_match?.sku || '',
       r.xac_nhan,
       r.ghi_chu,
+      r.anh || '',
     ]);
     exportToExcel(`HH_SHOP_DIEN_DOI_SOAT_${Date.now()}`, 'HH_SHOP_DIEN', headers, rows);
     showToast('Đã xuất Excel đối soát thành công!', 'success');
@@ -891,6 +1044,7 @@ export default function HHShopDienPage() {
                 <ResizableTh moduleId="hh_shop_dien" columnKey="hoan_tra" defaultWidth={75} align="center">Loại</ResizableTh>
                 <ResizableTh moduleId="hh_shop_dien" columnKey="kho_nhan" defaultWidth={160} align="left">Kho thực tế</ResizableTh>
                 <ResizableTh moduleId="hh_shop_dien" columnKey="kho_anh" defaultWidth={75} align="center">Ảnh kho</ResizableTh>
+                <ResizableTh moduleId="hh_shop_dien" columnKey="anh" defaultWidth={75} align="center">Ảnh shop</ResizableTh>
                 <ResizableTh moduleId="hh_shop_dien" columnKey="xac_nhan" defaultWidth={100} align="center">Xác nhận</ResizableTh>
                 <ResizableTh moduleId="hh_shop_dien" columnKey="ghi_chu" defaultWidth={150} align="left">Ghi chú</ResizableTh>
               </tr>
@@ -898,14 +1052,14 @@ export default function HHShopDienPage() {
             <tbody className="divide-y divide-slate-100">
               {filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan={15} className="text-center py-12 text-slate-400">
+                  <td colSpan={16} className="text-center py-12 text-slate-400">
                     Không tìm thấy dữ liệu phù hợp với bộ lọc.
                   </td>
                 </tr>
               ) : (
                 filteredData.map((item) => {
                   const kho = item.kho_match;
-                  const firstPhoto = kho?.anh_1 || kho?.anh_2 || kho?.anh_3;
+                  const firstKhoPhoto = kho?.anh_1 || kho?.anh_2 || kho?.anh_3;
 
                   return (
                     <tr
@@ -1060,15 +1214,37 @@ export default function HHShopDienPage() {
                         className="px-3 py-2 text-center whitespace-nowrap overflow-hidden text-ellipsis"
                         style={colStyle('kho_anh', 75)}
                       >
-                        {firstPhoto ? (
+                        {firstKhoPhoto ? (
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setPreviewImage(firstPhoto);
+                              setPreviewImage(firstKhoPhoto);
                             }}
                             className="p-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 transition-colors"
                             title="Xem ảnh bóc hàng của kho"
+                          >
+                            <ImageIcon className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <span className="text-slate-300">-</span>
+                        )}
+                      </td>
+
+                      {/* Ảnh shop đính kèm */}
+                      <td
+                        className="px-3 py-2 text-center whitespace-nowrap overflow-hidden text-ellipsis"
+                        style={colStyle('anh', 75)}
+                      >
+                        {item.anh ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPreviewImage(item.anh);
+                            }}
+                            className="p-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 transition-colors"
+                            title="Xem ảnh shop đính kèm"
                           >
                             <ImageIcon className="w-4 h-4" />
                           </button>
@@ -1118,10 +1294,10 @@ export default function HHShopDienPage() {
         </div>
       </div>
 
-      {/* 4. DRAWER NHẬP / SỬA 1 ĐƠN (TỰ ĐỘNG ĐIỀN TỪ MVD / MDH) */}
+      {/* 4. DRAWER NHẬP / SỬA 1 ĐƠN (GIAO DIỆN MỚI TỐI ƯU THEO YÊU CẦU) */}
       {isDrawerOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/50 backdrop-blur-xs">
-          <div className="w-full max-w-lg h-full bg-white shadow-2xl flex flex-col p-4 sm:p-5 space-y-4 animate-slide-left">
+          <div className="w-full max-w-lg h-full bg-white shadow-2xl flex flex-col p-4 sm:p-5 space-y-3.5 animate-slide-left">
             {/* Header Drawer */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 flex-shrink-0">
               <div className="flex items-center gap-2">
@@ -1139,11 +1315,11 @@ export default function HHShopDienPage() {
             </div>
 
             {/* Nội dung form */}
-            <div className="space-y-3.5 flex-1 overflow-y-auto text-xs pr-1">
+            <div className="space-y-3 flex-1 overflow-y-auto text-xs pr-1">
               {/* Phản hồi tra cứu tự động */}
               {lookupFeedback && (
                 <div
-                  className={`p-3 rounded-xl border flex items-start gap-2 ${
+                  className={`p-2.5 rounded-xl border flex items-start gap-2 ${
                     lookupFeedback.type === 'success'
                       ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
                       : lookupFeedback.type === 'multiple'
@@ -1159,35 +1335,6 @@ export default function HHShopDienPage() {
                     <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
                   )}
                   <div className="flex-1 font-medium">{lookupFeedback.message}</div>
-                </div>
-              )}
-
-              {/* Danh sách lựa chọn sản phẩm nếu 1 đơn có nhiều món */}
-              {multiMatches.length > 1 && (
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 space-y-1.5">
-                  <div className="font-bold text-slate-700 text-[11px]">
-                    Chọn món hàng hoàn trong đơn này:
-                  </div>
-                  <div className="space-y-1 max-h-36 overflow-y-auto">
-                    {multiMatches.map((m, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => handleSelectMultiItem(m)}
-                        className="w-full text-left p-2 rounded-lg bg-white border border-slate-200 hover:border-indigo-400 text-xs flex items-center justify-between gap-2 transition-colors"
-                      >
-                        <div className="truncate">
-                          <span className="font-mono font-bold text-indigo-700">
-                            {m.id_sp_ct || m.id_sp}
-                          </span>
-                          <span className="text-slate-500 ml-1.5">({m.ten_sp})</span>
-                        </div>
-                        <span className="text-slate-400 text-[10px] flex-shrink-0">
-                          SL: {m.so_luong}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
                 </div>
               )}
 
@@ -1253,86 +1400,323 @@ export default function HHShopDienPage() {
                 </div>
               </div>
 
-              {/* Ô 4: SKU và Tên sản phẩm */}
+              {/* Ô 4: SKU sản phẩm gửi - NẾU ĐƠN NHIỀU SP THÌ HIỆN HẾT RA */}
               <div>
-                <label className="block font-bold text-slate-700 mb-1">SKU sản phẩm gửi</label>
-                <input
-                  type="text"
-                  value={formData.sku}
-                  onChange={(e) => setFormData({ ...formData, sku: e.target.value.toUpperCase() })}
-                  placeholder="SKU sản phẩm..."
-                  className="w-full p-2 bg-white border border-slate-200 rounded-xl font-mono font-bold text-indigo-700 uppercase outline-none"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-bold text-slate-700">
+                    SKU sản phẩm gửi {matchedOrderItems.length > 1 ? `(${matchedOrderItems.length} sản phẩm trong đơn)` : ''}
+                  </label>
+                  {matchedOrderItems.length > 1 && (
+                    <span className="text-[11px] text-indigo-600 font-medium">Bấm để chọn món hoàn</span>
+                  )}
+                </div>
+
+                {matchedOrderItems.length > 1 ? (
+                  /* Hiển thị toàn bộ danh sách sản phẩm trong đơn */
+                  <div className="space-y-1.5 p-2 bg-slate-50 border border-slate-200 rounded-xl max-h-48 overflow-y-auto">
+                    {matchedOrderItems.map((item, idx) => {
+                      const itemSku = item.id_sp_ct || item.id_sp || item.sku_shop_up;
+                      const isSelected = formData.sku === itemSku;
+
+                      return (
+                        <div
+                          key={idx}
+                          onClick={() => handleSelectOrderItem(item)}
+                          className={`p-2 rounded-xl border text-xs cursor-pointer transition-all flex items-center justify-between gap-2 ${
+                            isSelected
+                              ? 'bg-indigo-50 border-indigo-300 ring-2 ring-indigo-500/20'
+                              : 'bg-white border-slate-200 hover:border-indigo-200'
+                          }`}
+                        >
+                          <div className="flex-1 truncate">
+                            <div className="font-mono font-bold text-indigo-700 flex items-center gap-1.5">
+                              <span>{itemSku}</span>
+                              <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600">
+                                SL: {item.so_luong || 1}
+                              </span>
+                            </div>
+                            <div className="text-slate-600 text-[11px] truncate mt-0.5" title={item.ten_sp}>
+                              {item.ten_sp || 'Không có tên SP'}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            className={`px-2 py-1 rounded-lg text-[11px] font-semibold flex-shrink-0 ${
+                              isSelected
+                                ? 'bg-indigo-600 text-white'
+                                : 'bg-slate-100 text-slate-700'
+                            }`}
+                          >
+                            {isSelected ? 'Đang chọn' : 'Chọn'}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  /* Nếu đơn chỉ có 1 SP hoặc nhập tay */
+                  <input
+                    type="text"
+                    value={formData.sku}
+                    onChange={(e) => setFormData({ ...formData, sku: e.target.value.toUpperCase() })}
+                    placeholder="SKU sản phẩm gửi..."
+                    className="w-full p-2 bg-white border border-slate-200 rounded-xl font-mono font-bold text-indigo-700 uppercase outline-none"
+                  />
+                )}
               </div>
 
+              {/* Tên sản phẩm */}
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Tên sản phẩm</label>
                 <input
                   type="text"
                   value={formData.ten_sp}
                   onChange={(e) => setFormData({ ...formData, ten_sp: e.target.value })}
-                  placeholder="Tên sản phẩm (tự điền từ đơn hàng)..."
+                  placeholder="Tên sản phẩm..."
                   className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 outline-none"
                 />
               </div>
 
-              {/* Ô 5: MVD Trả & SKU Trả */}
-              <div className="grid grid-cols-2 gap-2.5">
+              {/* Ô 5: MVD HOÀN/TRẢ - 1 HÀNG RIÊNG (THEO YÊU CẦU) */}
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Mã vận đơn Hoàn/Trả (MVD Trả)
+                </label>
+                <input
+                  type="text"
+                  value={formData.mvd_tra}
+                  onChange={(e) => setFormData({ ...formData, mvd_tra: e.target.value.toUpperCase() })}
+                  placeholder="MVD chiều về (mặc định giống MVD gửi nếu là Hoàn)..."
+                  className="w-full p-2 bg-white border border-slate-200 focus:border-indigo-500 rounded-xl font-mono font-semibold text-slate-800 outline-none uppercase"
+                />
+              </div>
+
+              {/* Ô 6: SKU HOÀN/TRẢ VỚI SỐ LƯỢNG - 1 HÀNG CHUNG (THEO YÊU CẦU) */}
+              <div className="grid grid-cols-[1fr_90px] gap-2.5">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">MVD Hoàn/Trả</label>
-                  <input
-                    type="text"
-                    value={formData.mvd_tra}
-                    onChange={(e) => setFormData({ ...formData, mvd_tra: e.target.value.toUpperCase() })}
-                    placeholder="MVD chiều về..."
-                    className="w-full p-2 bg-white border border-slate-200 rounded-xl font-mono outline-none uppercase"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">SKU Hoàn/Trả</label>
+                  <label className="block font-bold text-slate-800 mb-1">SKU Hoàn/Trả</label>
                   <input
                     type="text"
                     value={formData.sku_tra}
                     onChange={(e) => setFormData({ ...formData, sku_tra: e.target.value.toUpperCase() })}
                     placeholder="SKU khách trả..."
-                    className="w-full p-2 bg-white border border-slate-200 rounded-xl font-mono uppercase outline-none"
+                    className="w-full p-2 bg-white border border-slate-200 rounded-xl font-mono uppercase font-semibold text-slate-800 outline-none"
                   />
                 </div>
-              </div>
-
-              {/* Ô 6: Số lượng & Loại */}
-              <div className="grid grid-cols-2 gap-2.5">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Số lượng</label>
+                  <label className="block font-bold text-slate-800 mb-1">Số lượng</label>
                   <input
                     type="number"
                     min="1"
                     value={formData.sl}
                     onChange={(e) => setFormData({ ...formData, sl: e.target.value })}
-                    className="w-full p-2 bg-white border border-slate-200 rounded-xl font-bold outline-none"
+                    className="w-full p-2 bg-white border border-slate-200 rounded-xl font-bold text-center outline-none"
                   />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Loại</label>
-                  <select
-                    value={formData.hoan_tra}
-                    onChange={(e) => {
-                      const newType = e.target.value;
-                      setFormData({
-                        ...formData,
-                        hoan_tra: newType,
-                        mvd_tra: newType === 'Hoàn' && !formData.mvd_tra ? formData.mvd : formData.mvd_tra,
-                      });
-                    }}
-                    className="w-full p-2 bg-white border border-slate-200 rounded-xl font-bold outline-none"
-                  >
-                    <option value="Hoàn">Hoàn (Chuyển hoàn)</option>
-                    <option value="Trả">Trả (Khách trả hàng)</option>
-                  </select>
                 </div>
               </div>
 
-              {/* Ô 7: Ghi chú */}
+              {/* Ô 7: LOẠI ĐƠN - DÙNG BUTTON TOGGLE (THEO YÊU CẦU) */}
+              <div>
+                <label className="block font-bold text-slate-800 mb-1.5">Loại đơn</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormData((prev) => ({
+                        ...prev,
+                        hoan_tra: 'Hoàn',
+                        mvd_tra: !prev.mvd_tra || prev.mvd_tra === prev.mvd ? prev.mvd : prev.mvd_tra,
+                      }));
+                    }}
+                    className={`py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+                      formData.hoan_tra.toLowerCase() === 'hoàn'
+                        ? 'bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-500/20'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'
+                    }`}
+                  >
+                    <Check
+                      className={`w-3.5 h-3.5 ${
+                        formData.hoan_tra.toLowerCase() === 'hoàn' ? 'opacity-100' : 'opacity-0'
+                      }`}
+                    />
+                    <span>Hoàn (Chuyển hoàn)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormData((prev) => ({
+                        ...prev,
+                        hoan_tra: 'Trả',
+                      }));
+                    }}
+                    className={`py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+                      formData.hoan_tra.toLowerCase() === 'trả'
+                        ? 'bg-amber-600 text-white shadow-sm ring-2 ring-amber-500/20'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'
+                    }`}
+                  >
+                    <Check
+                      className={`w-3.5 h-3.5 ${
+                        formData.hoan_tra.toLowerCase() === 'trả' ? 'opacity-100' : 'opacity-0'
+                      }`}
+                    />
+                    <span>Trả (Khách trả hàng)</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Ô 8: HÌNH ẢNH ĐÍNH KÈM (HỖ TRỢ CTRL + V VÀ ĐỌC OCR TỪ ẢNH) */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-slate-800 flex items-center gap-1">
+                    <ImageIcon className="w-4 h-4 text-indigo-600" />
+                    <span>Ảnh đính kèm (Nhấn Ctrl + V để dán)</span>
+                  </label>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1"
+                    >
+                      <Upload className="w-3 h-3" />
+                      <span>Chọn file</span>
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleProcessImageFile(file);
+                        e.target.value = '';
+                      }}
+                      className="hidden"
+                    />
+                  </div>
+                </div>
+
+                {/* Preview Thumbnail ảnh */}
+                {imageUploading ? (
+                  <div className="py-6 border-2 border-dashed border-indigo-300 rounded-xl flex flex-col items-center justify-center bg-indigo-50/50">
+                    <Loader2 className="w-6 h-6 text-indigo-600 animate-spin mb-1" />
+                    <span className="text-xs text-indigo-700 font-semibold">Đang nén và tải ảnh lên...</span>
+                  </div>
+                ) : imagePreviewUrl || formData.anh ? (
+                  <div className="space-y-2">
+                    <div className="relative rounded-xl overflow-hidden border border-slate-200 bg-white max-h-40 flex items-center justify-center group">
+                      <img
+                        src={imagePreviewUrl || formData.anh}
+                        alt="Ảnh đính kèm"
+                        className="max-h-40 w-auto object-contain cursor-pointer"
+                        onClick={() => setPreviewImage(imagePreviewUrl || formData.anh)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setImagePreviewUrl('');
+                          setFormData((prev) => ({ ...prev, anh: '' }));
+                          setOcrCandidates([]);
+                          setOcrFullText('');
+                        }}
+                        className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 hover:bg-rose-600 text-white transition-colors"
+                        title="Xóa ảnh"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    {/* Nút bấm Đọc OCR từ ảnh */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={ocrLoading}
+                        onClick={handleRunOcrOnImage}
+                        className="flex-1 py-1.5 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+                      >
+                        {ocrLoading ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Đang đọc chữ OCR ({ocrProgress}%)...</span>
+                          </>
+                        ) : (
+                          <>
+                            <ScanText className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>Đọc chữ từ ảnh (OCR)</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="py-4 border-2 border-dashed border-slate-300 hover:border-indigo-400 rounded-xl flex flex-col items-center justify-center text-center cursor-pointer transition-colors bg-white"
+                  >
+                    <Upload className="w-5 h-5 text-slate-400 mb-1" />
+                    <span className="text-xs font-semibold text-slate-700">
+                      Bấm để tải ảnh hoặc nhấn <strong>Ctrl + V</strong> để dán ảnh chụp
+                    </span>
+                    <span className="text-[10px] text-slate-400 mt-0.5">
+                      Hỗ trợ đọc OCR lấy mã vận đơn trực tiếp từ ảnh
+                    </span>
+                  </div>
+                )}
+
+                {/* Kết quả OCR từ ảnh */}
+                {showOcrBox && (ocrCandidates.length > 0 || ocrFullText) && (
+                  <div className="bg-white border border-indigo-200 rounded-xl p-2.5 space-y-2 mt-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-indigo-900 flex items-center gap-1">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                        Mã phát hiện được từ ảnh ({ocrCandidates.length}):
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowOcrBox(false)}
+                        className="text-slate-400 hover:text-slate-600"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    {ocrCandidates.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {ocrCandidates.map((code, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => {
+                              handleMvdChange(code);
+                              showToast(`Đã điền MVD: ${code}`, 'success');
+                            }}
+                            className="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800 font-mono text-xs font-bold flex items-center gap-1 transition-colors"
+                            title="Bấm để điền vào ô MVD"
+                          >
+                            <span>{code}</span>
+                            <ArrowRight className="w-3 h-3 text-indigo-500" />
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-slate-500">
+                        Chưa tự động lọc được mã chuẩn. Bạn có thể xem toàn bộ text bên dưới:
+                      </div>
+                    )}
+
+                    {ocrFullText && (
+                      <div className="mt-1">
+                        <div className="text-[10px] font-bold text-slate-500 mb-0.5">Toàn bộ chữ đọc được:</div>
+                        <div className="max-h-20 overflow-y-auto bg-slate-50 rounded p-1.5 text-[10px] font-mono text-slate-700 whitespace-pre-wrap border border-slate-100">
+                          {ocrFullText}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Ô 9: Ghi chú của Shop */}
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Ghi chú của Shop</label>
                 <textarea
@@ -1451,7 +1835,7 @@ export default function HHShopDienPage() {
         }}
       />
 
-      {/* 7. MODAL XEM ẢNH BÓC HÀNG CỦA KHO */}
+      {/* 7. MODAL XEM ẢNH BÓC HÀNG CỦA KHO HOẶC ẢNH SHOP */}
       <ImagePreviewModal
         isOpen={Boolean(previewImage)}
         imageUrl={previewImage}
