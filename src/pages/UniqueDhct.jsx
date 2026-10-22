@@ -25,15 +25,11 @@ import {
 export default function UniqueDhctPage() {
   const { user } = useAuth();
   const { showToast } = useToast();
-  const { getColumnWidth, isColumnVisible } = useColumnWidths();
+  const { getColumnWidth, isColumnVisible, getColStyle } = useColumnWidths();
 
   const colStyle = useCallback(
-    (key, defaultW) => {
-      if (!isColumnVisible('unique_dh_ct', key)) return { display: 'none' };
-      const w = getColumnWidth('unique_dh_ct', key, defaultW);
-      return { width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` };
-    },
-    [getColumnWidth, isColumnVisible]
+    (key, defaultW, defAlign) => getColStyle('unique_dh_ct', key, defaultW, defAlign),
+    [getColStyle]
   );
 
   const [dhctData, setDhctData] = useState([]);

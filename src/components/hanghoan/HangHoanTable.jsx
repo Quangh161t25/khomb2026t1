@@ -21,7 +21,7 @@ export default function HangHoanTable({
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
   const [copiedId, setCopiedId] = useState(null);
-  const { getColumnWidth, isColumnVisible } = useColumnWidths();
+  const { getColumnWidth, isColumnVisible, getColStyle } = useColumnWidths();
   const toast = useToast();
 
   const handleCopyText = async (e, text, rowKey) => {
@@ -49,12 +49,8 @@ export default function HangHoanTable({
   };
 
   const colStyle = useCallback(
-    (key, defaultW) => {
-      if (!isColumnVisible('hang_hoan', key)) return { display: 'none' };
-      const w = getColumnWidth('hang_hoan', key, defaultW);
-      return { width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` };
-    },
-    [getColumnWidth, isColumnVisible]
+    (key, defaultW, defAlign) => getColStyle('hang_hoan', key, defaultW, defAlign),
+    [getColStyle]
   );
 
   // Reset page when list length changes

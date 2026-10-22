@@ -70,3 +70,29 @@ table td [class*="text-[9px]"],
 table td [class*="text-[10px]"] {
   font-size: max(9px, calc(var(--app-table-font-size) - 3px)) !important;
 }
+
+/* Support table column wrap text (Xuống dòng giống Excel) */
+table th[data-wrap="true"],
+table td[data-wrap="true"],
+th[data-wrap="true"],
+td[data-wrap="true"],
+table th[style*="white-space: normal"],
+table td[style*="white-space: normal"],
+table th[style*="white-space:normal"],
+table td[style*="white-space:normal"] {
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow-wrap: anywhere !important;
+}
+
+table th[data-wrap="true"] *,
+table td[data-wrap="true"] *,
+th[data-wrap="true"] *,
+td[data-wrap="true"] *,
+table th[style*="white-space: normal"] *,
+table td[style*="white-space: normal"] *,
+table th[style*="white-space:normal"] *,
+table td[style*="white-space:normal"] * {
+  white-space: normal !important;
+  text-overflow: unset !important;
+}

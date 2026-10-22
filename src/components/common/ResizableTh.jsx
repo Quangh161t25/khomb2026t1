@@ -16,12 +16,21 @@ export default function ResizableTh({
   onClick,
   title,
 }) {
-  const { getColumnWidth, updateColumnWidth, isColumnVisible, getColumnLabel } =
-    useColumnWidths();
+  const {
+    getColumnWidth,
+    updateColumnWidth,
+    isColumnVisible,
+    getColumnLabel,
+    getColumnAlign,
+    isColumnWrap,
+  } = useColumnWidths();
   const width = getColumnWidth(moduleId, columnKey, defaultWidth);
   const isVisible = isColumnVisible ? isColumnVisible(moduleId, columnKey) : true;
   const customLabel = getColumnLabel ? getColumnLabel(moduleId, columnKey) : '';
   const displayContent = customLabel && customLabel.trim() ? customLabel : children;
+
+  const effectiveAlign = getColumnAlign ? getColumnAlign(moduleId, columnKey, align) : align;
+  const isWrap = isColumnWrap ? isColumnWrap(moduleId, columnKey) : false;
 
   const [isResizing, setIsResizing] = useState(false);
   const startXRef = useRef(0);
@@ -65,7 +74,11 @@ export default function ResizableTh({
   };
 
   const alignClass =
-    align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left';
+    effectiveAlign === 'center'
+      ? 'text-center'
+      : effectiveAlign === 'right'
+      ? 'text-right'
+      : 'text-left';
 
   if (!isVisible) {
     return null;
@@ -75,17 +88,31 @@ export default function ResizableTh({
     <th
       onClick={onClick}
       title={title || (typeof displayContent === 'string' ? displayContent : undefined)}
+      data-wrap={isWrap ? 'true' : undefined}
       style={{
         ...style,
         width: `${width}px`,
         minWidth: `${width}px`,
         maxWidth: `${width}px`,
+        textAlign: effectiveAlign,
+        whiteSpace: isWrap ? 'normal' : 'nowrap',
+        wordBreak: isWrap ? 'break-word' : undefined,
       }}
       className={`relative px-3 py-2.5 font-bold uppercase select-none group transition-colors ${alignClass} ${
         sticky ? stickyClass || 'sticky z-20 bg-slate-100' : ''
       } ${className}`}
     >
-      <div className={`w-full overflow-hidden text-ellipsis ${align === 'right' ? 'flex justify-end' : align === 'center' ? 'flex justify-center' : 'flex justify-start'}`}>
+      <div
+        className={`w-full overflow-hidden ${
+          isWrap ? 'whitespace-normal break-words' : 'text-ellipsis whitespace-nowrap'
+        } ${
+          effectiveAlign === 'right'
+            ? 'flex justify-end'
+            : effectiveAlign === 'center'
+            ? 'flex justify-center'
+            : 'flex justify-start'
+        }`}
+      >
         {displayContent}
       </div>
 

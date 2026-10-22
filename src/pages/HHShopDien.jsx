@@ -29,16 +29,12 @@ import {
 export default function HHShopDienPage() {
   const { user } = useAuth();
   const { showToast } = useToast();
-  const { getColumnWidth, isColumnVisible } = useColumnWidths();
+  const { getColumnWidth, isColumnVisible, getColStyle } = useColumnWidths();
   const todayStr = toYMD(new Date());
 
   const colStyle = useCallback(
-    (key, defaultW) => {
-      if (!isColumnVisible('hh_shop_dien', key)) return { display: 'none' };
-      const w = getColumnWidth('hh_shop_dien', key, defaultW);
-      return { width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` };
-    },
-    [getColumnWidth, isColumnVisible]
+    (key, defaultW, defAlign) => getColStyle('hh_shop_dien', key, defaultW, defAlign),
+    [getColStyle]
   );
 
   const [shopData, setShopData] = useState([]);

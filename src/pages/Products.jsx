@@ -22,15 +22,11 @@ import {
 export default function SanPhamPage() {
   const { user } = useAuth();
   const { showToast } = useToast();
-  const { getColumnWidth, isColumnVisible } = useColumnWidths();
+  const { getColumnWidth, isColumnVisible, getColStyle } = useColumnWidths();
 
   const colStyle = useCallback(
-    (key, defaultW) => {
-      if (!isColumnVisible('sanpham', key)) return { display: 'none' };
-      const w = getColumnWidth('sanpham', key, defaultW);
-      return { width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` };
-    },
-    [getColumnWidth, isColumnVisible]
+    (key, defaultW, defAlign) => getColStyle('sanpham', key, defaultW, defAlign),
+    [getColStyle]
   );
 
   const [products, setProducts] = useState([]);

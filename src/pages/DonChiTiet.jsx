@@ -39,15 +39,11 @@ import { useAutoSync } from '../hooks/useAutoSync';
 
 export default function DonChiTietPage() {
   const { showToast } = useToast();
-  const { getColumnWidth, isColumnVisible } = useColumnWidths();
+  const { getColumnWidth, isColumnVisible, getColStyle } = useColumnWidths();
 
   const colStyle = useCallback(
-    (key, defaultW) => {
-      if (!isColumnVisible('dhct', key)) return { display: 'none' };
-      const w = getColumnWidth('dhct', key, defaultW);
-      return { width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` };
-    },
-    [getColumnWidth, isColumnVisible]
+    (key, defaultW, defAlign) => getColStyle('dhct', key, defaultW, defAlign),
+    [getColStyle]
   );
 
   const [dhctData, setDhctData] = useState([]);

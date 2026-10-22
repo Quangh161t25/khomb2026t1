@@ -140,6 +140,8 @@ export const MODULE_COLUMNS_CONFIG = {
 const STORAGE_KEY_WIDTHS = 'KHO_2026_COLUMN_WIDTHS';
 const STORAGE_KEY_VISIBILITY = 'KHO_2026_COLUMN_VISIBILITY';
 const STORAGE_KEY_LABELS = 'KHO_2026_COLUMN_LABELS';
+const STORAGE_KEY_ALIGN = 'KHO_2026_COLUMN_ALIGN';
+const STORAGE_KEY_WRAP = 'KHO_2026_COLUMN_WRAP';
 const STORAGE_KEY_SYSTEM_FONT_SIZE = 'KHO_2026_SYSTEM_FONT_SIZE';
 const STORAGE_KEY_TABLE_FONT_SIZE = 'KHO_2026_TABLE_FONT_SIZE';
 
@@ -254,12 +256,67 @@ function getInitialLabels() {
   return initial;
 }
 
+function getInitialAlign() {
+  const initial = {};
+  Object.keys(MODULE_COLUMNS_CONFIG).forEach((modKey) => {
+    initial[modKey] = {};
+  });
+
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY_ALIGN);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      Object.keys(parsed).forEach((modKey) => {
+        if (!initial[modKey]) initial[modKey] = {};
+        Object.keys(parsed[modKey] || {}).forEach((colKey) => {
+          const val = parsed[modKey][colKey];
+          if (val === 'left' || val === 'center' || val === 'right') {
+            initial[modKey][colKey] = val;
+          }
+        });
+      });
+    }
+  } catch (e) {
+    console.error('Error loading column alignments from localStorage:', e);
+  }
+
+  return initial;
+}
+
+function getInitialWrap() {
+  const initial = {};
+  Object.keys(MODULE_COLUMNS_CONFIG).forEach((modKey) => {
+    initial[modKey] = {};
+  });
+
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY_WRAP);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      Object.keys(parsed).forEach((modKey) => {
+        if (!initial[modKey]) initial[modKey] = {};
+        Object.keys(parsed[modKey] || {}).forEach((colKey) => {
+          if (parsed[modKey][colKey] !== undefined) {
+            initial[modKey][colKey] = Boolean(parsed[modKey][colKey]);
+          }
+        });
+      });
+    }
+  } catch (e) {
+    console.error('Error loading column wrap from localStorage:', e);
+  }
+
+  return initial;
+}
+
 const ColumnWidthContext = createContext(null);
 
 export function ColumnWidthProvider({ children }) {
   const [columnWidths, setColumnWidths] = useState(getInitialWidths);
   const [columnVisibility, setColumnVisibility] = useState(getInitialVisibility);
   const [columnLabels, setColumnLabels] = useState(getInitialLabels);
+  const [columnAlignments, setColumnAlignments] = useState(getInitialAlign);
+  const [columnWrap, setColumnWrap] = useState(getInitialWrap);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState('columns');
   const [activeSettingsModule, setActiveSettingsModule] = useState('donhang');
@@ -327,6 +384,24 @@ export function ColumnWidthProvider({ children }) {
       console.error('Error saving column labels to localStorage:', e);
     }
   }, [columnLabels]);
+
+  // Persist columnAlignments
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_ALIGN, JSON.stringify(columnAlignments));
+    } catch (e) {
+      console.error('Error saving column alignments to localStorage:', e);
+    }
+  }, [columnAlignments]);
+
+  // Persist columnWrap
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_WRAP, JSON.stringify(columnWrap));
+    } catch (e) {
+      console.error('Error saving column wrap to localStorage:', e);
+    }
+  }, [columnWrap]);
 
   // Update a single column's width
   const updateColumnWidth = useCallback((moduleId, colKey, width) => {
@@ -440,14 +515,95 @@ export function ColumnWidthProvider({ children }) {
     });
   }, []);
 
-  // Reset a specific column completely (width, visibility, label)
+  // Alignment helpers
+  const getColumnAlign = useCallback(
+    (moduleId, colKey, fallbackAlign) => {
+      const custom = columnAlignments[moduleId]?.[colKey];
+      if (custom === 'left' || custom === 'center' || custom === 'right') {
+        return custom;
+      }
+      if (fallbackAlign) return fallbackAlign;
+      const modConfig = MODULE_COLUMNS_CONFIG[moduleId];
+      const col = modConfig?.columns?.find((c) => c.key === colKey);
+      return col?.align || 'left';
+    },
+    [columnAlignments]
+  );
+
+  const setColumnAlign = useCallback((moduleId, colKey, align) => {
+    if (align !== 'left' && align !== 'center' && align !== 'right') return;
+    setColumnAlignments((prev) => ({
+      ...prev,
+      [moduleId]: {
+        ...(prev[moduleId] || {}),
+        [colKey]: align,
+      },
+    }));
+  }, []);
+
+  const resetColumnAlign = useCallback((moduleId, colKey) => {
+    setColumnAlignments((prev) => {
+      const nextMod = { ...(prev[moduleId] || {}) };
+      delete nextMod[colKey];
+      return {
+        ...prev,
+        [moduleId]: nextMod,
+      };
+    });
+  }, []);
+
+  // Wrap Text helpers
+  const isColumnWrap = useCallback(
+    (moduleId, colKey) => {
+      return Boolean(columnWrap[moduleId]?.[colKey]);
+    },
+    [columnWrap]
+  );
+
+  const toggleColumnWrap = useCallback((moduleId, colKey) => {
+    setColumnWrap((prev) => {
+      const current = Boolean(prev[moduleId]?.[colKey]);
+      return {
+        ...prev,
+        [moduleId]: {
+          ...(prev[moduleId] || {}),
+          [colKey]: !current,
+        },
+      };
+    });
+  }, []);
+
+  const setColumnWrapExplicit = useCallback((moduleId, colKey, wrap) => {
+    setColumnWrap((prev) => ({
+      ...prev,
+      [moduleId]: {
+        ...(prev[moduleId] || {}),
+        [colKey]: Boolean(wrap),
+      },
+    }));
+  }, []);
+
+  const resetColumnWrap = useCallback((moduleId, colKey) => {
+    setColumnWrap((prev) => {
+      const nextMod = { ...(prev[moduleId] || {}) };
+      delete nextMod[colKey];
+      return {
+        ...prev,
+        [moduleId]: nextMod,
+      };
+    });
+  }, []);
+
+  // Reset a specific column completely (width, visibility, label, align, wrap)
   const resetColumnConfig = useCallback(
     (moduleId, colKey, defaultWidth = 100) => {
       updateColumnWidth(moduleId, colKey, defaultWidth);
       setColumnVisible(moduleId, colKey, true);
       resetColumnLabel(moduleId, colKey);
+      resetColumnAlign(moduleId, colKey);
+      resetColumnWrap(moduleId, colKey);
     },
-    [updateColumnWidth, setColumnVisible, resetColumnLabel]
+    [updateColumnWidth, setColumnVisible, resetColumnLabel, resetColumnAlign, resetColumnWrap]
   );
 
   // Reset module widths
@@ -466,12 +622,20 @@ export function ColumnWidthProvider({ children }) {
     });
   }, []);
 
-  // Reset module completely (widths, visibility, labels)
+  // Reset module completely (widths, visibility, labels, align, wrap)
   const resetModuleAll = useCallback(
     (moduleId) => {
       resetModuleWidths(moduleId);
       showAllColumns(moduleId);
       setColumnLabels((prev) => ({
+        ...prev,
+        [moduleId]: {},
+      }));
+      setColumnAlignments((prev) => ({
+        ...prev,
+        [moduleId]: {},
+      }));
+      setColumnWrap((prev) => ({
         ...prev,
         [moduleId]: {},
       }));
@@ -494,17 +658,29 @@ export function ColumnWidthProvider({ children }) {
     setColumnWidths(defWidths);
     setColumnVisibility(defVis);
     setColumnLabels({});
+    setColumnAlignments({});
+    setColumnWrap({});
   }, []);
 
   // Helper returning style object for <td> cells
   const getColStyle = useCallback(
-    (moduleId, colKey, defaultWidth = 100) => {
+    (moduleId, colKey, defaultWidth = 100, defaultAlign) => {
       const visible = columnVisibility[moduleId]?.[colKey] !== false;
       if (!visible) return { display: 'none' };
       const w = columnWidths[moduleId]?.[colKey] ?? defaultWidth;
-      return { width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` };
+      const align = getColumnAlign(moduleId, colKey, defaultAlign);
+      const isWrap = isColumnWrap(moduleId, colKey);
+      return {
+        width: `${w}px`,
+        minWidth: `${w}px`,
+        maxWidth: `${w}px`,
+        textAlign: align,
+        whiteSpace: isWrap ? 'normal' : 'nowrap',
+        wordBreak: isWrap ? 'break-word' : undefined,
+        overflowWrap: isWrap ? 'anywhere' : undefined,
+      };
     },
-    [columnVisibility, columnWidths]
+    [columnVisibility, columnWidths, getColumnAlign, isColumnWrap]
   );
 
   const openSettings = useCallback((tab = 'columns', targetModule) => {
@@ -530,6 +706,8 @@ export function ColumnWidthProvider({ children }) {
     columnWidths,
     columnVisibility,
     columnLabels,
+    columnAlignments,
+    columnWrap,
     updateColumnWidth,
     getColumnWidth,
     isColumnVisible,
@@ -539,6 +717,13 @@ export function ColumnWidthProvider({ children }) {
     getColumnLabel,
     setColumnLabel,
     resetColumnLabel,
+    getColumnAlign,
+    setColumnAlign,
+    resetColumnAlign,
+    isColumnWrap,
+    toggleColumnWrap,
+    setColumnWrap: setColumnWrapExplicit,
+    resetColumnWrap,
     resetColumnConfig,
     resetModuleWidths,
     resetModuleAll,

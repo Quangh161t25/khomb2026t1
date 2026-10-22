@@ -26,16 +26,12 @@ const BAN_DON_KHUNG_OPTIONS = ['8H', '9H', '10H', '11H', '13H', '14H', '15H', '1
 
 export default function BanDonPage() {
   const { showToast } = useToast();
-  const { getColumnWidth, isColumnVisible } = useColumnWidths();
+  const { getColumnWidth, isColumnVisible, getColStyle } = useColumnWidths();
   const todayStr = toYMD(new Date());
 
   const colStyle = useCallback(
-    (key, defaultW) => {
-      if (!isColumnVisible('ban_don', key)) return { display: 'none' };
-      const w = getColumnWidth('ban_don', key, defaultW);
-      return { width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` };
-    },
-    [getColumnWidth, isColumnVisible]
+    (key, defaultW, defAlign) => getColStyle('ban_don', key, defaultW, defAlign),
+    [getColStyle]
   );
 
   const [dateFilter, setDateFilter] = useState(todayStr);

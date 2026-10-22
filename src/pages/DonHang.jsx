@@ -73,16 +73,12 @@ export default function DonHangPage() {
   const { user } = useAuth();
   const isKinhDoanh = (user?.role || '').toLowerCase() === 'kinhdoanh';
   const { showToast } = useToast();
-  const { getColumnWidth, isColumnVisible } = useColumnWidths();
+  const { getColumnWidth, isColumnVisible, getColStyle } = useColumnWidths();
   const todayStr = toYMD(new Date());
 
   const colStyle = useCallback(
-    (key, defaultW) => {
-      if (!isColumnVisible('donhang', key)) return { display: 'none' };
-      const w = getColumnWidth('donhang', key, defaultW);
-      return { width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` };
-    },
-    [getColumnWidth, isColumnVisible]
+    (key, defaultW, defAlign) => getColStyle('donhang', key, defaultW, defAlign),
+    [getColStyle]
   );
 
   const [udctData, setUdctData] = useState([]);

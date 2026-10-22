@@ -35,15 +35,11 @@ import QRScannerModal from '../components/common/QRScannerModal';
 
 export default function DonHangTongPage() {
   const { showToast } = useToast();
-  const { getColumnWidth, isColumnVisible } = useColumnWidths();
+  const { getColumnWidth, isColumnVisible, getColStyle } = useColumnWidths();
 
   const colStyle = useCallback(
-    (key, defaultW) => {
-      if (!isColumnVisible('donhang_tong', key)) return { display: 'none' };
-      const w = getColumnWidth('donhang_tong', key, defaultW);
-      return { width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` };
-    },
-    [getColumnWidth, isColumnVisible]
+    (key, defaultW, defAlign) => getColStyle('donhang_tong', key, defaultW, defAlign),
+    [getColStyle]
   );
 
   const [dhctData, setDhctData] = useState([]);

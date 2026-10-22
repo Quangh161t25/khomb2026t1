@@ -30,15 +30,11 @@ import {
 
 export default function InventoryPage() {
   const { showToast } = useToast();
-  const { getColumnWidth, isColumnVisible } = useColumnWidths();
+  const { getColumnWidth, isColumnVisible, getColStyle } = useColumnWidths();
 
   const colStyle = useCallback(
-    (key, defaultW) => {
-      if (!isColumnVisible('inventory', key)) return { display: 'none' };
-      const w = getColumnWidth('inventory', key, defaultW);
-      return { width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` };
-    },
-    [getColumnWidth, isColumnVisible]
+    (key, defaultW, defAlign) => getColStyle('inventory', key, defaultW, defAlign),
+    [getColStyle]
   );
 
   const [inventoryData, setInventoryData] = useState([]);
