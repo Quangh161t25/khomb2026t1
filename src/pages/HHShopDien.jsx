@@ -123,7 +123,7 @@ export default function HHShopDienPage() {
     sl: '1',
     hoan_tra: 'Hoàn',
     ghi_chu: '',
-    xac_nhan: 'ĐÃ XÁC NHẬN',
+    xac_nhan: 'CHỜ XÁC NHẬN',
     nguoi_nhap: user?.name || user?.username || 'Shop',
     anh: '',
   });
@@ -421,6 +421,28 @@ export default function HHShopDienPage() {
     performUdctLookup(formData.mvd, updatedMdh);
   };
 
+  // Toggle trạng thái xác nhận nhanh trên bảng
+  const handleToggleXacNhan = async (item, e) => {
+    e?.stopPropagation();
+    const nextVal = item.xac_nhan === 'ĐÃ XÁC NHẬN' ? 'CHỜ XÁC NHẬN' : 'ĐÃ XÁC NHẬN';
+    setShopData((prev) =>
+      prev.map((r) => (r.rowIndex === item.rowIndex ? { ...r, xac_nhan: nextVal } : r))
+    );
+    try {
+      await batchUpdateSheetValues([
+        {
+          range: `${CONFIG.hhShopDienSheetName}!N${item.rowIndex}`,
+          values: [[nextVal]],
+        },
+      ]);
+      showToast(`Đã chuyển trạng thái xác nhận: ${nextVal}`, 'success');
+    } catch (err) {
+      console.error('Error toggling xac_nhan:', err);
+      showToast('Lỗi khi đổi trạng thái xác nhận: ' + err.message, 'error');
+      loadData(true);
+    }
+  };
+
   const handleSelectOrderItem = (item) => {
     const targetSku = item.id_sp_ct || item.id_sp || item.sku_shop_up || '';
     setFormData((prev) => ({
@@ -549,7 +571,7 @@ export default function HHShopDienPage() {
       sl: '1',
       hoan_tra: 'Hoàn',
       ghi_chu: '',
-      xac_nhan: 'ĐÃ XÁC NHẬN',
+      xac_nhan: 'CHỜ XÁC NHẬN',
       nguoi_nhap: user?.name || user?.username || 'Shop',
       anh: '',
     });
@@ -579,7 +601,7 @@ export default function HHShopDienPage() {
       sl: item.sl || '1',
       hoan_tra: item.hoan_tra || 'Hoàn',
       ghi_chu: item.ghi_chu || '',
-      xac_nhan: item.xac_nhan || 'ĐÃ XÁC NHẬN',
+      xac_nhan: item.xac_nhan || 'CHỜ XÁC NHẬN',
       nguoi_nhap: item.nguoi_nhap || user?.name || '',
       anh: item.anh || '',
     });
@@ -623,7 +645,7 @@ export default function HHShopDienPage() {
       formData.sl || '1',
       formData.hoan_tra || 'Hoàn',
       formData.ghi_chu.trim(),
-      formData.xac_nhan || 'ĐÃ XÁC NHẬN',
+      formData.xac_nhan || 'CHỜ XÁC NHẬN',
       formData.nguoi_nhap || user?.name || '',
       formData.anh || '',
     ];
@@ -740,7 +762,7 @@ export default function HHShopDienPage() {
           '1',
           'Hoàn',
           '',
-          'ĐÃ XÁC NHẬN',
+          'CHỜ XÁC NHẬN',
           user?.name || 'Shop',
           '',
         ]);
@@ -1264,15 +1286,18 @@ export default function HHShopDienPage() {
                         className="px-3 py-2 text-center whitespace-nowrap overflow-hidden text-ellipsis"
                         style={colStyle('xac_nhan', 100)}
                       >
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        <button
+                          type="button"
+                          onClick={(e) => handleToggleXacNhan(item, e)}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
                             item.xac_nhan === 'ĐÃ XÁC NHẬN'
-                              ? 'bg-emerald-50 text-emerald-700'
-                              : 'bg-slate-100 text-slate-600'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                              : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
                           }`}
+                          title="Bấm để đổi trạng thái giữa CHỜ XÁC NHẬN và ĐÃ XÁC NHẬN"
                         >
-                          {item.xac_nhan || 'ĐÃ XÁC NHẬN'}
-                        </span>
+                          {item.xac_nhan || 'CHỜ XÁC NHẬN'}
+                        </button>
                       </td>
 
                       {/* Ghi chú */}

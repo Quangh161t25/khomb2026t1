@@ -241,9 +241,12 @@ export default function HangHoanPage() {
   // Filtered Data
   const filteredData = useMemo(() => {
     return data.filter((item) => {
+      const isSearching = Boolean(filters.search && filters.search.trim().length >= 3);
       const ngay = toYMD(item.ngay_nhan);
-      if (filters.from && ngay < filters.from) return false;
-      if (filters.to && ngay > filters.to) return false;
+      if (!isSearching) {
+        if (filters.from && ngay < filters.from) return false;
+        if (filters.to && ngay > filters.to) return false;
+      }
       if (filters.kho && item.kho !== filters.kho) return false;
       if (filters.maGian && item.ma_gian !== filters.maGian) return false;
 
