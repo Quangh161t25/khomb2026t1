@@ -365,23 +365,30 @@ export default function HangHoanDrawer({
   useEffect(() => {
     if (isOpen) {
       if (mode === 'edit' || mode === 'copy') {
-        setMvd(mode === 'copy' ? '' : initialData.mvd || '');
-        // Khi mode === 'copy': chỉ để lại chuỗi forward (MVD 2)
-        setMvd2(initialData.mvd_2 || (mode === 'copy' ? initialData.mvd || '' : ''));
+        // Giữ nguyên toàn bộ thông tin đơn hàng (MVD, MVD 2, Mã gian, MDH, Tình trạng, Kho, Ngày nhận, Ảnh...)
+        setMvd(initialData.mvd || '');
+        setMvd2(initialData.mvd_2 || '');
         setMaGian(initialData.ma_gian || '');
+        // Chỉ xóa SKU này thôi để người dùng nhập mã mới
         setSku(mode === 'copy' ? '' : initialData.sku || '');
         setSkuCt(mode === 'copy' ? '' : initialData.sku_ct || '');
-        setSlg(parseFloat(initialData.slg) || 1);
+        setSkuCtFirstChar('');
+        setSlg(mode === 'copy' ? 1 : (parseFloat(initialData.slg) || 1));
         setHoanTra(initialData.trang_thai || 'Hoàn');
         setKho(initialData.kho || 'KHO');
-        setTinhTrang(mode === 'copy' ? '' : (initialData.tinh_trang || ''));
+        setTinhTrang(initialData.tinh_trang || '');
         setTenSp(mode === 'copy' ? '' : initialData.ten_sp || '');
-        setNgayNhan(mode === 'copy' ? getTodayYmd() : (initialData.ngay_nhan || getTodayYmd()));
-        setMdh(mode === 'copy' ? '' : initialData.id_dh || '');
-        setAnh1(mode === 'copy' ? '' : initialData.anh_1 || '');
-        setAnh2(mode === 'copy' ? '' : initialData.anh_2 || '');
-        setAnh3(mode === 'copy' ? '' : initialData.anh_3 || '');
+        setNgayNhan(initialData.ngay_nhan || getTodayYmd());
+        setMdh(initialData.id_dh || '');
+        setAnh1(initialData.anh_1 || '');
+        setAnh2(initialData.anh_2 || '');
+        setAnh3(initialData.anh_3 || '');
         setHistoryText('');
+        if (mode === 'copy') {
+          setTimeout(() => {
+            skuCtInputRef.current?.focus();
+          }, 150);
+        }
       } else {
         // mode === 'create'
         setMvd('');

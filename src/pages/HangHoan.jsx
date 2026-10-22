@@ -314,26 +314,19 @@ export default function HangHoanPage() {
       showToast('Tài khoản KINHDOANH không được sao chép Dữ liệu Hàng hoàn.', 'warning');
       return;
     }
-    const forwardCode = (item?.mvd_2 || item?.mvd || '').trim();
     setSelectedItem({
       ...item,
       id: '',
       rowIndex: null,
-      mvd: '',
-      mvd_2: forwardCode,
       sku: '',
       sku_ct: '',
       ten_sp: '',
-      tinh_trang: '',
+      slg: '1',
       ghi_chu: '',
-      anh_1: '',
-      anh_2: '',
-      anh_3: '',
-      ngay_nhan: todayStr,
     });
     setDrawerMode('copy');
     setIsDrawerOpen(true);
-    showToast(`Đã sao chép: Chỉ giữ lại chuỗi Forward (${forwardCode || 'Trống'}).`, 'info');
+    showToast('Đã sao chép đơn: Đã xóa SKU để nhập mã mới, các thông tin khác giữ nguyên.', 'info');
   };
 
   // Handle Save (Create or Edit)
