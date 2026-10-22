@@ -374,7 +374,10 @@ export default function HHShopDienPage() {
         ma_gian: first.ma_gian || prev.ma_gian,
         sku: matches.length === 1 ? (first.id_sp_ct || first.id_sp || first.sku_shop_up) : prev.sku,
         ten_sp: matches.length === 1 ? first.ten_sp : prev.ten_sp,
-        mvd_tra: prev.mvd_tra || prev.mvd || first.mvd,
+        mvd_tra:
+          prev.hoan_tra.toLowerCase() === 'hoàn'
+            ? (prev.mvd_tra || prev.mvd || first.mvd)
+            : ((prev.mvd_tra || '').trim().toUpperCase() === (first.mvd || '').trim().toUpperCase() ? '' : prev.mvd_tra),
         sku_tra: matches.length === 1 ? (first.id_sp_ct || first.id_sp) : prev.sku_tra,
         sl: matches.length === 1 ? (first.so_luong || '1') : prev.sl,
       }));
@@ -404,7 +407,10 @@ export default function HHShopDienPage() {
     setFormData((prev) => ({
       ...prev,
       mvd: updatedMvd,
-      mvd_tra: prev.hoan_tra.toLowerCase() === 'hoàn' && !prev.mvd_tra ? updatedMvd : prev.mvd_tra,
+      mvd_tra:
+        prev.hoan_tra.toLowerCase() === 'hoàn' && (!prev.mvd_tra || prev.mvd_tra === prev.mvd)
+          ? updatedMvd
+          : prev.mvd_tra,
     }));
     performUdctLookup(updatedMvd, formData.mdh);
   };
@@ -1525,7 +1531,7 @@ export default function HHShopDienPage() {
                       setFormData((prev) => ({
                         ...prev,
                         hoan_tra: 'Hoàn',
-                        mvd_tra: !prev.mvd_tra || prev.mvd_tra === prev.mvd ? prev.mvd : prev.mvd_tra,
+                        mvd_tra: !prev.mvd_tra ? prev.mvd : prev.mvd_tra,
                       }));
                     }}
                     className={`py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
@@ -1548,6 +1554,10 @@ export default function HHShopDienPage() {
                       setFormData((prev) => ({
                         ...prev,
                         hoan_tra: 'Trả',
+                        mvd_tra:
+                          (prev.mvd_tra || '').trim().toUpperCase() === (prev.mvd || '').trim().toUpperCase()
+                            ? ''
+                            : prev.mvd_tra,
                       }));
                     }}
                     className={`py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
