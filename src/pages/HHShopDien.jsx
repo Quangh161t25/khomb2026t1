@@ -96,7 +96,6 @@ export default function HHShopDienPage() {
   const [toDate, setToDate] = useState('');
   const [maGianFilter, setMaGianFilter] = useState('');
   const [doiSoatFilter, setDoiSoatFilter] = useState('ALL'); // ALL | DA_NHAN | CHO_NHAN | OVERDUE | LECH_HANG
-  const [xacNhanFilter, setXacNhanFilter] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
 
   // Modals & Drawers
@@ -199,6 +198,7 @@ export default function HHShopDienPage() {
           tinh_trang: (row[14] || '').toString().trim(),
           trang_thai: (row[15] || '').toString().trim(),
           id_nv: (row[17] || '').toString().trim(),
+          kho: (row[20] || '').toString().trim(),
         }));
         setHhbhData(parsedHh);
       } else {
@@ -240,36 +240,67 @@ export default function HHShopDienPage() {
   const hhbhMap = useMemo(() => {
     const map = new Map();
     hhbhData.forEach((item) => {
-      if (item.mvd) {
-        map.set(item.mvd.toUpperCase(), item);
-      }
-      if (item.mvd_2 && item.mvd_2.toUpperCase() !== item.mvd?.toUpperCase()) {
-        map.set(item.mvd_2.toUpperCase(), item);
-      }
+      const k1 = (item.mvd || '').toString().replace(/[\r\n\t]/g, '').trim().toUpperCase();
+      const k2 = (item.mvd_2 || '').toString().replace(/[\r\n\t]/g, '').trim().toUpperCase();
+
+      const addKey = (k) => {
+        if (!k) return;
+        const list = map.get(k) || [];
+        list.push(item);
+        map.set(k, list);
+      };
+
+      if (k1) addKey(k1);
+      if (k2 && k2 !== k1) addKey(k2);
     });
     return map;
   }, [hhbhData]);
 
-  // 3. Kết hợp đối soát giữa Dữ liệu Shop Điền và Kho Hàng Hoàn
+  // 3. Kết hợp đối soát giữa Dữ liệu Shop Điền và Kho Hàng Hoàn theo MVD & MVD Hoàn
   const reconciledData = useMemo(() => {
     const now = new Date();
     return shopData.map((item) => {
-      const cleanMvd = (item.mvd || '').toUpperCase();
-      const cleanMvdTra = (item.mvd_tra || '').toUpperCase();
+      const cleanMvd = (item.mvd || '').toString().replace(/[\r\n\t]/g, '').trim().toUpperCase();
+      const cleanMvdTra = (item.mvd_tra || '').toString().replace(/[\r\n\t]/g, '').trim().toUpperCase();
 
-      const khoMatch = (cleanMvdTra && hhbhMap.get(cleanMvdTra)) || (cleanMvd && hhbhMap.get(cleanMvd)) || null;
+      // So sánh cả MVD hoàn (mvd_tra) và MVD gửi đi (mvd) với module hàng hoàn (mvd và mvd_2)
+      const matchesTra = (cleanMvdTra && hhbhMap.get(cleanMvdTra)) || [];
+      const matchesMvd = (cleanMvd && hhbhMap.get(cleanMvd)) || [];
 
+      // Gộp các kết quả khớp, loại bỏ dòng trùng lặp
+      const matchesMap = new Map();
+      [...matchesTra, ...matchesMvd].forEach((m) => {
+        if (!matchesMap.has(m.rowIndex)) {
+          matchesMap.set(m.rowIndex, m);
+        }
+      });
+      const matches = Array.from(matchesMap.values());
+
+      let khoMatch = null;
       let status = 'CHO_NHAN';
       let isOverdue = false;
       let daysWaiting = 0;
 
-      if (khoMatch) {
-        const shopSku = (item.sku_tra || item.sku || '').toUpperCase();
-        const khoSku = (khoMatch.sku_ct || khoMatch.sku || '').toUpperCase();
-
-        if (shopSku && khoSku && !khoSku.includes(shopSku) && !shopSku.includes(khoSku)) {
-          status = 'LECH_HANG';
+      if (matches.length > 0) {
+        const shopSku = (item.sku_tra || item.sku || '').toString().trim().toUpperCase();
+        if (shopSku) {
+          const exactMatch = matches.find((m) => {
+            const kSkuCt = (m.sku_ct || '').toString().trim().toUpperCase();
+            const kSku = (m.sku || '').toString().trim().toUpperCase();
+            return (
+              (kSkuCt && (kSkuCt.includes(shopSku) || shopSku.includes(kSkuCt))) ||
+              (kSku && (kSku.includes(shopSku) || shopSku.includes(kSku)))
+            );
+          });
+          if (exactMatch) {
+            khoMatch = exactMatch;
+            status = 'DA_NHAN';
+          } else {
+            khoMatch = matches[0];
+            status = 'LECH_HANG';
+          }
         } else {
+          khoMatch = matches[0];
           status = 'DA_NHAN';
         }
       } else {
@@ -328,7 +359,6 @@ export default function HHShopDienPage() {
         if (fromDate && itemYMD < fromDate) return false;
         if (toDate && itemYMD > toDate) return false;
         if (maGianFilter && item.ma_gian !== maGianFilter) return false;
-        if (xacNhanFilter && item.xac_nhan !== xacNhanFilter) return false;
 
         if (doiSoatFilter === 'DA_NHAN' && item.doi_soat_status !== 'DA_NHAN') return false;
         if (doiSoatFilter === 'CHO_NHAN' && item.doi_soat_status !== 'CHO_NHAN') return false;
@@ -343,7 +373,7 @@ export default function HHShopDienPage() {
         return true;
       })
       .sort((a, b) => b.rowIndex - a.rowIndex);
-  }, [reconciledData, fromDate, toDate, maGianFilter, xacNhanFilter, doiSoatFilter, searchTerm]);
+  }, [reconciledData, fromDate, toDate, maGianFilter, doiSoatFilter, searchTerm]);
 
   // 4. Tra cứu tự động từ UD_CT khi gõ MVD hoặc MDH
   const performUdctLookup = (mvdVal, mdhVal) => {
@@ -419,28 +449,6 @@ export default function HHShopDienPage() {
     const updatedMdh = val.trim();
     setFormData((prev) => ({ ...prev, mdh: updatedMdh }));
     performUdctLookup(formData.mvd, updatedMdh);
-  };
-
-  // Toggle trạng thái xác nhận nhanh trên bảng
-  const handleToggleXacNhan = async (item, e) => {
-    e?.stopPropagation();
-    const nextVal = item.xac_nhan === 'ĐÃ XÁC NHẬN' ? 'CHỜ XÁC NHẬN' : 'ĐÃ XÁC NHẬN';
-    setShopData((prev) =>
-      prev.map((r) => (r.rowIndex === item.rowIndex ? { ...r, xac_nhan: nextVal } : r))
-    );
-    try {
-      await batchUpdateSheetValues([
-        {
-          range: `${CONFIG.hhShopDienSheetName}!N${item.rowIndex}`,
-          values: [[nextVal]],
-        },
-      ]);
-      showToast(`Đã chuyển trạng thái xác nhận: ${nextVal}`, 'success');
-    } catch (err) {
-      console.error('Error toggling xac_nhan:', err);
-      showToast('Lỗi khi đổi trạng thái xác nhận: ' + err.message, 'error');
-      loadData(true);
-    }
   };
 
   const handleSelectOrderItem = (item) => {
@@ -804,9 +812,9 @@ export default function HHShopDienPage() {
       'SKU Trả',
       'SL',
       'Loại',
+      'Kho thực tế',
       'Ngày kho nhận',
       'SKU kho nhận',
-      'Xác nhận',
       'Ghi chú',
       'Link ảnh',
     ];
@@ -817,8 +825,8 @@ export default function HHShopDienPage() {
         : r.doi_soat_status === 'LECH_HANG'
         ? 'Lệch SKU'
         : r.is_overdue
-        ? `Chờ nhận (${r.days_waiting} ngày - Quá hạn)`
-        : `Chờ nhận (${r.days_waiting} ngày)`,
+        ? `Chưa nhận (${r.days_waiting} ngày - Quá hạn)`
+        : `Chưa nhận (${r.days_waiting} ngày)`,
       r.mvd,
       r.mdh,
       r.ma_gian,
@@ -828,9 +836,9 @@ export default function HHShopDienPage() {
       r.sku_tra,
       r.sl,
       r.hoan_tra,
+      r.kho_match?.kho || '',
       r.kho_match?.ngay_nhan || '',
       r.kho_match?.sku_ct || r.kho_match?.sku || '',
-      r.xac_nhan,
       r.ghi_chu,
       r.anh || '',
     ]);
@@ -1006,17 +1014,17 @@ export default function HHShopDienPage() {
             />
           </div>
 
-          {/* Lọc Trạng thái đối soát */}
+          {/* Lọc Trạng thái kho đối soát */}
           <select
             value={doiSoatFilter}
             onChange={(e) => setDoiSoatFilter(e.target.value)}
             className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none"
           >
-            <option value="ALL">Tất cả đối soát ({kpiStats.total})</option>
+            <option value="ALL">Tất cả trạng thái kho ({kpiStats.total})</option>
             <option value="DA_NHAN">🟢 Đã nhận kho ({kpiStats.daNhan})</option>
-            <option value="CHO_NHAN">🟡 Chờ kho nhận ({kpiStats.choNhan})</option>
+            <option value="CHO_NHAN">🟡 Chưa nhận kho ({kpiStats.choNhan})</option>
             <option value="OVERDUE">⚠️ Quá hạn &gt; 7 ngày ({kpiStats.overdue})</option>
-            <option value="LECH_HANG">🔴 Lệch hàng / Bất thường ({kpiStats.lechHang})</option>
+            <option value="LECH_HANG">🔴 Lệch SKU ({kpiStats.lechHang})</option>
           </select>
 
           {/* Lọc Gian hàng */}
@@ -1031,17 +1039,6 @@ export default function HHShopDienPage() {
                 Gian: {g}
               </option>
             ))}
-          </select>
-
-          {/* Lọc Xác nhận */}
-          <select
-            value={xacNhanFilter}
-            onChange={(e) => setXacNhanFilter(e.target.value)}
-            className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none"
-          >
-            <option value="">Tất cả xác nhận</option>
-            <option value="ĐÃ XÁC NHẬN">ĐÃ XÁC NHẬN</option>
-            <option value="CHỜ XÁC NHẬN">CHỜ XÁC NHẬN</option>
           </select>
 
           {/* Tìm kiếm đa năng */}
@@ -1071,21 +1068,20 @@ export default function HHShopDienPage() {
                 <ResizableTh moduleId="hh_shop_dien" columnKey="ma_gian" defaultWidth={90} align="center">Mã gian</ResizableTh>
                 <ResizableTh moduleId="hh_shop_dien" columnKey="sku" defaultWidth={130} align="left">SKU Shop</ResizableTh>
                 <ResizableTh moduleId="hh_shop_dien" columnKey="ten_sp" defaultWidth={180} align="left">Tên sản phẩm</ResizableTh>
-                <ResizableTh moduleId="hh_shop_dien" columnKey="mvd_tra" defaultWidth={150} align="left">MVD Trả</ResizableTh>
-                <ResizableTh moduleId="hh_shop_dien" columnKey="sku_tra" defaultWidth={120} align="left">SKU Trả</ResizableTh>
+                <ResizableTh moduleId="hh_shop_dien" columnKey="mvd_tra" defaultWidth={150} align="left">MVD Hoàn</ResizableTh>
+                <ResizableTh moduleId="hh_shop_dien" columnKey="sku_tra" defaultWidth={120} align="left">SKU Hoàn</ResizableTh>
                 <ResizableTh moduleId="hh_shop_dien" columnKey="sl" defaultWidth={65} align="right">SL</ResizableTh>
                 <ResizableTh moduleId="hh_shop_dien" columnKey="hoan_tra" defaultWidth={75} align="center">Loại</ResizableTh>
                 <ResizableTh moduleId="hh_shop_dien" columnKey="kho_nhan" defaultWidth={160} align="left">Kho thực tế</ResizableTh>
                 <ResizableTh moduleId="hh_shop_dien" columnKey="kho_anh" defaultWidth={75} align="center">Ảnh kho</ResizableTh>
                 <ResizableTh moduleId="hh_shop_dien" columnKey="anh" defaultWidth={75} align="center">Ảnh shop</ResizableTh>
-                <ResizableTh moduleId="hh_shop_dien" columnKey="xac_nhan" defaultWidth={100} align="center">Xác nhận</ResizableTh>
                 <ResizableTh moduleId="hh_shop_dien" columnKey="ghi_chu" defaultWidth={150} align="left">Ghi chú</ResizableTh>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan={16} className="text-center py-12 text-slate-400">
+                  <td colSpan={15} className="text-center py-12 text-slate-400">
                     Không tìm thấy dữ liệu phù hợp với bộ lọc.
                   </td>
                 </tr>
@@ -1138,7 +1134,7 @@ export default function HHShopDienPage() {
                             title={`Đã chờ ${item.days_waiting} ngày`}
                           >
                             <Clock className="w-3.5 h-3.5 text-amber-600" />
-                            Chờ nhận ({item.days_waiting}d)
+                            Chưa nhận ({item.days_waiting}d)
                           </span>
                         )}
                       </td>
@@ -1230,11 +1226,11 @@ export default function HHShopDienPage() {
                       >
                         {kho ? (
                           <div className="flex flex-col text-[11px]">
-                            <span className="font-semibold text-slate-900">
+                            <span className="font-semibold text-slate-900" title={kho.sku_ct || kho.sku}>
                               {kho.sku_ct || kho.sku || 'Đã nhận'}
                             </span>
                             <span className="text-slate-400 text-[10px]">
-                              {kho.ngay_nhan || ''} {kho.id_nv ? `(${kho.id_nv})` : ''}
+                              {kho.kho ? `[${kho.kho}] ` : ''}{formatYmdToDmy(kho.ngay_nhan) || kho.ngay_nhan || ''} {kho.id_nv ? `(${kho.id_nv})` : ''}
                             </span>
                           </div>
                         ) : (
@@ -1284,25 +1280,6 @@ export default function HHShopDienPage() {
                         ) : (
                           <span className="text-slate-300">-</span>
                         )}
-                      </td>
-
-                      {/* Xác nhận */}
-                      <td
-                        className="px-3 py-2 text-center whitespace-nowrap overflow-hidden text-ellipsis"
-                        style={colStyle('xac_nhan', 100)}
-                      >
-                        <button
-                          type="button"
-                          onClick={(e) => handleToggleXacNhan(item, e)}
-                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
-                            item.xac_nhan === 'ĐÃ XÁC NHẬN'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                              : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
-                          }`}
-                          title="Bấm để đổi trạng thái giữa CHỜ XÁC NHẬN và ĐÃ XÁC NHẬN"
-                        >
-                          {item.xac_nhan || 'CHỜ XÁC NHẬN'}
-                        </button>
                       </td>
 
                       {/* Ghi chú */}
@@ -1516,27 +1493,27 @@ export default function HHShopDienPage() {
               {/* Ô 5: MVD HOÀN/TRẢ - 1 HÀNG RIÊNG (THEO YÊU CẦU) */}
               <div>
                 <label className="block font-bold text-slate-800 mb-1 flex items-center gap-1">
-                  <span>Mã vận đơn Hoàn/Trả (MVD Trả)</span>
+                  <span>Mã vận đơn Hoàn (MVD Hoàn)</span>
                   <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.mvd_tra}
                   onChange={(e) => setFormData({ ...formData, mvd_tra: e.target.value.toUpperCase() })}
-                  placeholder="MVD chiều về (bắt buộc)..."
+                  placeholder="MVD hoàn / MVD chiều về (bắt buộc)..."
                   className="w-full p-2 bg-white border border-slate-200 focus:border-indigo-500 rounded-xl font-mono font-semibold text-slate-800 outline-none uppercase"
                 />
               </div>
 
-              {/* Ô 6: SKU HOÀN/TRẢ VỚI SỐ LƯỢNG - 1 HÀNG CHUNG (THEO YÊU CẦU) */}
+              {/* Ô 6: SKU HOÀN VỚI SỐ LƯỢNG - 1 HÀNG CHUNG (THEO YÊU CẦU) */}
               <div className="grid grid-cols-[1fr_90px] gap-2.5">
                 <div>
-                  <label className="block font-bold text-slate-800 mb-1">SKU Hoàn/Trả</label>
+                  <label className="block font-bold text-slate-800 mb-1">SKU Hoàn</label>
                   <input
                     type="text"
                     value={formData.sku_tra}
                     onChange={(e) => setFormData({ ...formData, sku_tra: e.target.value.toUpperCase() })}
-                    placeholder="SKU khách trả..."
+                    placeholder="SKU hoàn về..."
                     className="w-full p-2 bg-white border border-slate-200 rounded-xl font-mono uppercase font-semibold text-slate-800 outline-none"
                   />
                 </div>
