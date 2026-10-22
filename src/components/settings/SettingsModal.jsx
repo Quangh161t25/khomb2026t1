@@ -412,10 +412,18 @@ export default function SettingsModal() {
 
                             {/* 3. Tên gốc */}
                             <td className="px-3 py-2 font-bold text-slate-800">
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className={!isVisible ? 'line-through text-slate-400' : ''}>
                                   {col.label}
                                 </span>
+                                {col.isVirtual && (
+                                  <span
+                                    className="text-[9px] px-1.5 py-0.2 rounded bg-purple-50 text-purple-700 border border-purple-200 font-bold"
+                                    title="Cột ảo đối soát thời gian thực từ module Hàng hoàn (HH_BH), không lưu trong Google Sheet gốc"
+                                  >
+                                    ⚡ Realtime
+                                  </span>
+                                )}
                                 {!isVisible && (
                                   <span className="text-[9px] px-1.5 py-0.2 rounded bg-rose-50 text-rose-600 border border-rose-200 font-bold">
                                     Đã ẩn

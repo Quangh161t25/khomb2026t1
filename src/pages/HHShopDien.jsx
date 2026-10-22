@@ -1321,7 +1321,17 @@ export default function HHShopDienPage() {
                     defaultWidth={col.defaultWidth}
                     align={col.align}
                   >
-                    {col.label}
+                    <span className="inline-flex items-center gap-1">
+                      <span>{col.label}</span>
+                      {col.isVirtual && (
+                        <span
+                          className="text-[9px] px-1 py-0.2 rounded font-bold bg-purple-100 text-purple-700 normal-case border border-purple-200 shrink-0"
+                          title="Cột ảo đối soát thời gian thực từ module Hàng hoàn (HH_BH)"
+                        >
+                          ⚡ Realtime
+                        </span>
+                      )}
+                    </span>
                   </ResizableTh>
                 ))}
               </tr>
