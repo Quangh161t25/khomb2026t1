@@ -596,7 +596,7 @@ export default function HHShopDienPage() {
       ma_gian: item.ma_gian || '',
       sku: item.sku || '',
       ten_sp: item.ten_sp || '',
-      mvd_tra: item.mvd_tra || item.mvd || '',
+      mvd_tra: item.mvd_tra || '',
       sku_tra: item.sku_tra || item.sku || '',
       sl: item.sl || '1',
       hoan_tra: item.hoan_tra || 'Hoàn',
@@ -629,6 +629,11 @@ export default function HHShopDienPage() {
       return;
     }
 
+    if (!formData.mvd_tra || !formData.mvd_tra.trim()) {
+      showToast('Vui lòng nhập Mã vận đơn Hoàn/Trả (MVD Trả)!', 'warning');
+      return;
+    }
+
     const ngayVN = formatYmdToDmy(formData.ngay_tra) || formData.ngay_tra;
     const nowTimeStr = new Date().toLocaleString('vi-VN');
     const rowValues = [
@@ -640,7 +645,7 @@ export default function HHShopDienPage() {
       formData.ma_gian.trim().toUpperCase(),
       formData.sku.trim().toUpperCase(),
       formData.ten_sp.trim(),
-      (formData.mvd_tra || formData.mvd).trim().toUpperCase(),
+      formData.mvd_tra.trim().toUpperCase(),
       (formData.sku_tra || formData.sku).trim().toUpperCase(),
       formData.sl || '1',
       formData.hoan_tra || 'Hoàn',
@@ -1510,14 +1515,15 @@ export default function HHShopDienPage() {
 
               {/* Ô 5: MVD HOÀN/TRẢ - 1 HÀNG RIÊNG (THEO YÊU CẦU) */}
               <div>
-                <label className="block font-bold text-slate-800 mb-1">
-                  Mã vận đơn Hoàn/Trả (MVD Trả)
+                <label className="block font-bold text-slate-800 mb-1 flex items-center gap-1">
+                  <span>Mã vận đơn Hoàn/Trả (MVD Trả)</span>
+                  <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.mvd_tra}
                   onChange={(e) => setFormData({ ...formData, mvd_tra: e.target.value.toUpperCase() })}
-                  placeholder="MVD chiều về (mặc định giống MVD gửi nếu là Hoàn)..."
+                  placeholder="MVD chiều về (bắt buộc)..."
                   className="w-full p-2 bg-white border border-slate-200 focus:border-indigo-500 rounded-xl font-mono font-semibold text-slate-800 outline-none uppercase"
                 />
               </div>
