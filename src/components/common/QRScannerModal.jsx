@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
-import Tesseract from 'tesseract.js';
 import {
   X,
   Camera,
@@ -19,111 +18,27 @@ import {
   Sparkles,
   ArrowRight,
   Crop,
+  Settings,
+  Cpu,
+  Cloud,
+  QrCode,
+  Key,
+  ExternalLink,
+  Sliders,
 } from 'lucide-react';
 import { playSuccessSound } from '../../utils/audioUtils';
-
-// Helper trích xuất các chuỗi có định dạng mã vận đơn hoặc mã số
-function extractCandidateCodes(rawText) {
-  if (!rawText) return [];
-  const candidates = new Set();
-
-  // Ghép các khoảng trắng bị ngắt nhầm giữa tiền tố vận chuyển và dãy số (VD: "SPXVN 03812..." -> "SPXVN03812...")
-  const normalizedText =
-    rawText +
-    '\n' +
-    rawText
-      .replace(/\b(SPX(?:VN)?|GHN|GHTK|JNT|LEX|LZD|VTP|VNPOST|TKM)\s+([A-Z0-9]{5,22})/gi, '$1$2')
-      .replace(/(\d{4,6})\s+(\d{4,6})(?:\s+(\d{3,6}))?/g, '$1$2$3');
-
-  // 1. Các định dạng đơn vị vận chuyển phổ biến (Shopee SPX, GHN, GHTK, J&T, TikTok, Lazada, ViettelPost)
-  const spxMatches = normalizedText.match(/SPX[A-Z0-9]{8,25}/gi) || [];
-  spxMatches.forEach((m) => candidates.add(m.trim().toUpperCase()));
-
-  const ghnMatches = normalizedText.match(/GHN[A-Z0-9]{6,20}/gi) || [];
-  ghnMatches.forEach((m) => candidates.add(m.trim().toUpperCase()));
-
-  const courierMatches =
-    normalizedText.match(/(?:GHTK|JNT|LEX|LZD|VTP|VNPOST|TKM)[A-Z0-9]{5,20}/gi) || [];
-  courierMatches.forEach((m) => candidates.add(m.trim().toUpperCase()));
-
-  // 2. Chuỗi chữ & số liền nhau từ 8-26 ký tự có chứa ít nhất 2 chữ số (mã vận đơn chuẩn)
-  const tokenMatches = normalizedText.match(/\b[A-Za-z0-9_-]{8,26}\b/g) || [];
-  tokenMatches.forEach((token) => {
-    const clean = token.replace(/^[_\-]+|[_\-]+$/g, '').toUpperCase();
-    const digitCount = (clean.match(/\d/g) || []).length;
-    // Bỏ qua các từ thông thường không có chữ số
-    if (clean.length >= 8 && clean.length <= 26 && digitCount >= 2) {
-      candidates.add(clean);
-    }
-  });
-
-  // 3. Chuỗi số nguyên dài từ 9 đến 18 số (mã GHTK, J&T, TikTok thuần số)
-  const numericMatches = normalizedText.match(/\b\d{9,18}\b/g) || [];
-  numericMatches.forEach((num) => candidates.add(num.trim()));
-
-  return Array.from(candidates);
-}
-
-// Tiền xử lý ảnh trên Canvas để tăng độ chính xác khi Quét lại chữ trong ảnh
-function createPreprocessedCanvas(img, { mode = 'enhanced', cropRect = null } = {}) {
-  const sx = cropRect ? Math.max(0, Math.round(cropRect.x * img.width)) : 0;
-  const sy = cropRect ? Math.max(0, Math.round(cropRect.y * img.height)) : 0;
-  const sw = cropRect
-    ? Math.max(24, Math.min(img.width - sx, Math.round(cropRect.w * img.width)))
-    : img.width;
-  const sh = cropRect
-    ? Math.max(24, Math.min(img.height - sy, Math.round(cropRect.h * img.height)))
-    : img.height;
-
-  // Phóng to nếu vùng ảnh nhỏ để Tesseract đọc nét chữ rõ hơn
-  const scale = sw < 500 ? 2.2 : sw < 900 ? 1.5 : 1;
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.round(sw * scale);
-  canvas.height = Math.round(sh * scale);
-  const ctx = canvas.getContext('2d');
-
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
-
-  if (mode === 'raw') {
-    return canvas;
-  }
-
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const data = imageData.data;
-
-  let sumLum = 0;
-  const pixelCount = data.length / 4;
-  for (let i = 0; i < data.length; i += 4) {
-    sumLum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-  }
-  const avgLum = sumLum / (pixelCount || 1);
-
-  for (let i = 0; i < data.length; i += 4) {
-    const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-
-    if (mode === 'bw') {
-      // Nhị phân hóa Đen - Trắng giúp nổi bật chữ trên tem nhiệt mờ hoặc bị lóa
-      const threshold = Math.min(205, Math.max(100, avgLum * 0.92));
-      const val = lum < threshold ? 0 : 255;
-      data[i] = val;
-      data[i + 1] = val;
-      data[i + 2] = val;
-    } else {
-      // mode === 'enhanced': Tăng tương phản mạnh (Contrast Stretch)
-      const contrast = 1.7;
-      let v = (lum - avgLum) * contrast + avgLum;
-      v = Math.max(0, Math.min(255, v));
-      data[i] = v;
-      data[i + 1] = v;
-      data[i + 2] = v;
-    }
-  }
-
-  ctx.putImageData(imageData, 0, 0);
-  return canvas;
-}
+import {
+  recognizeImage,
+  getPreferredOcrEngine,
+  setPreferredOcrEngine,
+  getSavedGeminiKey,
+  setSavedGeminiKey,
+  getSavedOcrSpaceKey,
+  setSavedOcrSpaceKey,
+  createProcessedCanvas,
+  loadImageElement,
+  extractCandidateCodes,
+} from '../../services/ocrService';
 
 // Xoay ảnh DataURL 90 độ
 function rotateImageDataUrl(imageSrc, degrees = 90) {
@@ -136,7 +51,6 @@ function rotateImageDataUrl(imageSrc, degrees = 90) {
         canvas.height = img.width;
       } else {
         canvas.width = img.width;
-        canvas.height = img.height;
       }
       const ctx = canvas.getContext('2d');
       ctx.translate(canvas.width / 2, canvas.height / 2);
@@ -146,16 +60,6 @@ function rotateImageDataUrl(imageSrc, degrees = 90) {
     };
     img.onerror = reject;
     img.src = imageSrc;
-  });
-}
-
-// Load HTMLImageElement từ DataURL
-function loadImageElement(src) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = src;
   });
 }
 
@@ -190,7 +94,7 @@ export default function QRScannerModal({
   isOpen,
   onClose,
   onScanSuccess,
-  title = 'Quét mã QR / Barcode',
+  title = 'Quét mã QR / Barcode & Đọc chữ (OCR)',
   continuous = false,
 }) {
   const [cameras, setCameras] = useState([]);
@@ -200,14 +104,21 @@ export default function QRScannerModal({
   const [torchOn, setTorchOn] = useState(false);
   const [hasFlash, setHasFlash] = useState(false);
 
-  // Trạng thái OCR
+  // Engine OCR đang chọn
+  const [selectedEngine, setSelectedEngineState] = useState(getPreferredOcrEngine);
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [geminiKeyInput, setGeminiKeyInput] = useState(getSavedGeminiKey);
+  const [ocrSpaceKeyInput, setOcrSpaceKeyInput] = useState(getSavedOcrSpaceKey);
+
+  // Trạng thái kết quả OCR
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
-  const [ocrResult, setOcrResult] = useState(null); // { fullText, candidates, imageSrc, scanModeLabel, error }
+  const [ocrStatusText, setOcrStatusText] = useState('');
+  const [ocrResult, setOcrResult] = useState(null);
   const [rescanCount, setRescanCount] = useState(0);
   const [copiedCode, setCopiedCode] = useState(null);
 
-  // Trạng thái khoanh vùng (crop) trên ảnh đã chụp để quét lại chính xác vùng chữ
+  // Trạng thái khoanh vùng (crop) trên ảnh
   const [cropRect, setCropRect] = useState(null); // { x, y, w, h } chuẩn hóa 0..1
   const [isDraggingCrop, setIsDraggingCrop] = useState(false);
   const cropStartRef = useRef(null);
@@ -217,6 +128,11 @@ export default function QRScannerModal({
   const fileInputRef = useRef(null);
   const containerId = 'qr-reader-container';
 
+  const setEngine = (engine) => {
+    setSelectedEngineState(engine);
+    setPreferredOcrEngine(engine);
+  };
+
   useEffect(() => {
     if (!isOpen) {
       stopScanner();
@@ -224,6 +140,7 @@ export default function QRScannerModal({
       setOcrLoading(false);
       setCropRect(null);
       setRescanCount(0);
+      setShowConfigModal(false);
       return;
     }
 
@@ -238,7 +155,6 @@ export default function QRScannerModal({
         if (isMounted) {
           if (devices && devices.length > 0) {
             setCameras(devices);
-            // Ưu tiên camera sau / environment
             const backCam = devices.find(
               (d) =>
                 d.label.toLowerCase().includes('back') ||
@@ -255,7 +171,7 @@ export default function QRScannerModal({
       } catch (err) {
         if (isMounted) {
           console.error('Lỗi khi truy cập camera:', err);
-          setErrorMsg('Không thể truy cập camera. Vui lòng cấp quyền truy cập camera trong trình duyệt.');
+          setErrorMsg('Không thể truy cập camera. Vui lòng cấp quyền camera trong trình duyệt.');
         }
       }
     }
@@ -277,7 +193,6 @@ export default function QRScannerModal({
       const html5QrCode = new Html5Qrcode(containerId);
       scannerRef.current = html5QrCode;
 
-      // Cấu hình khung quét dạng chữ nhật ngang tối ưu cho mã vạch 1D dài (Code 128) & QR
       const config = {
         fps: 15,
         qrbox: (viewfinderWidth, viewfinderHeight) => {
@@ -309,14 +224,11 @@ export default function QRScannerModal({
             }
           }
         },
-        () => {
-          // Frame parse error - ignore
-        }
+        () => {}
       );
 
       setScanning(true);
 
-      // Kiểm tra hỗ trợ đèn flash
       try {
         const track = html5QrCode.getRunningTrackCameraCapabilities();
         if (track && track.torchFeature && track.torchFeature().isSupported()) {
@@ -352,9 +264,7 @@ export default function QRScannerModal({
       try {
         await scannerRef.current.stop();
         scannerRef.current.clear();
-      } catch (e) {
-        // Ignore stop error
-      }
+      } catch (e) {}
       scannerRef.current = null;
       setScanning(false);
       setTorchOn(false);
@@ -371,97 +281,57 @@ export default function QRScannerModal({
     startScannerWithCamera(nextCamera.id);
   };
 
-  // Hàm thực thi OCR trên một ảnh DataURL có sẵn (hỗ trợ quét lại không cần chụp lại)
-  const runOcrOnImageSrc = async (imageSrc, { mode = 'raw', customCrop = null, mergePrevious = false } = {}) => {
+  // Hàm thực thi OCR đa tầng trên ảnh
+  const runOcrOnImageSrc = async (imageSrc, { engine = selectedEngine, customCrop = null } = {}) => {
     if (!imageSrc) return;
     setOcrLoading(true);
-    setOcrProgress(0);
+    setOcrProgress(15);
+    setOcrStatusText('Đang khởi động nhận diện...');
 
     try {
-      const img = await loadImageElement(imageSrc);
+      const result = await recognizeImage(imageSrc, {
+        engine,
+        cropRect: customCrop,
+        onProgress: (pct, msg) => {
+          setOcrProgress(pct);
+          if (msg) setOcrStatusText(msg);
+        },
+      });
 
-      const modeLabels = {
-        raw: 'Ảnh gốc',
-        enhanced: 'Tăng nét & tương phản',
-        bw: 'Đen trắng rõ chữ',
-      };
-
-      // Nếu quét lại ở chế độ 'auto_retry', chạy kết hợp cả Tăng tương phản + Đen trắng để bắt tối đa mã
-      if (mode === 'auto_retry') {
-        const canvasEnhanced = createPreprocessedCanvas(img, { mode: 'enhanced', cropRect: customCrop });
-        const res1 = await Tesseract.recognize(canvasEnhanced, 'eng', {
-          logger: (m) => {
-            if (m.status === 'recognizing text' && typeof m.progress === 'number') {
-              setOcrProgress(Math.round(m.progress * 60));
-            }
-          },
-        });
-        const text1 = (res1?.data?.text || '').trim();
-        const codes1 = extractCandidateCodes(text1);
-
-        const canvasBw = createPreprocessedCanvas(img, { mode: 'bw', cropRect: customCrop });
-        const res2 = await Tesseract.recognize(canvasBw, 'eng', {
-          logger: (m) => {
-            if (m.status === 'recognizing text' && typeof m.progress === 'number') {
-              setOcrProgress(60 + Math.round(m.progress * 40));
-            }
-          },
-        });
-        const text2 = (res2?.data?.text || '').trim();
-        const codes2 = extractCandidateCodes(text2);
-
-        const combinedCodes = Array.from(
-          new Set([...(mergePrevious && ocrResult?.candidates ? ocrResult.candidates : []), ...codes1, ...codes2])
-        );
-        const combinedText = [text1, text2].filter(Boolean).join('\n---\n');
-
-        setOcrResult({
-          fullText: combinedText || ocrResult?.fullText || '',
-          candidates: combinedCodes,
-          imageSrc,
-          scanModeLabel: customCrop ? 'Đã quét lại vùng chọn (Tăng nét)' : 'Đã quét lại (Tăng nét + Đen trắng)',
-          error: null,
-        });
-      } else {
-        const canvas = createPreprocessedCanvas(img, { mode, cropRect: customCrop });
-        const res = await Tesseract.recognize(canvas, 'eng', {
-          logger: (m) => {
-            if (m.status === 'recognizing text' && typeof m.progress === 'number') {
-              setOcrProgress(Math.round(m.progress * 100));
-            }
-          },
-        });
-
-        const fullText = (res?.data?.text || '').trim();
-        const newCandidates = extractCandidateCodes(fullText);
-        const finalCandidates = mergePrevious && ocrResult?.candidates
-          ? Array.from(new Set([...newCandidates, ...ocrResult.candidates]))
-          : newCandidates;
-
-        setOcrResult({
-          fullText: fullText || (mergePrevious ? ocrResult?.fullText || '' : ''),
-          candidates: finalCandidates,
-          imageSrc,
-          scanModeLabel: customCrop ? `Vùng chọn (${modeLabels[mode] || mode})` : modeLabels[mode] || 'Ảnh gốc',
-          error: null,
-        });
-      }
+      setOcrResult({
+        fullText: result.fullText || '',
+        candidates: result.candidates || [],
+        mvdList: result.mvdList || [],
+        mdhList: result.mdhList || [],
+        skuList: result.skuList || [],
+        structured: result.structured || null,
+        imageSrc,
+        engineUsed: result.engine,
+        scanModeLabel: result.engineLabel || 'Đã đọc thành công',
+        error: null,
+      });
     } catch (err) {
       console.error('Lỗi nhận diện OCR:', err);
-      // Giữ nguyên bức ảnh đã chụp để người dùng bấm Quét lại mà không phải chụp lại từ đầu
       setOcrResult((prev) => ({
         fullText: prev?.fullText || '',
         candidates: prev?.candidates || [],
+        mvdList: prev?.mvdList || [],
+        mdhList: prev?.mdhList || [],
+        skuList: prev?.skuList || [],
+        structured: null,
         imageSrc,
-        scanModeLabel: 'Quét lỗi - Có thể bấm Quét lại ngay trên ảnh này',
-        error: err.message || 'Không đọc được chữ ở lần quét này. Hãy bấm "Quét lại chữ trong ảnh" bên dưới.',
+        engineUsed: engine,
+        scanModeLabel: 'Quét chưa có kết quả',
+        error:
+          err.message ||
+          'Không tìm thấy mã rõ nét ở chế độ này. Hãy thử chọn nút Engine khác (Cloud OCR, Barcode hoặc AI) bên trên!',
       }));
     } finally {
       setOcrLoading(false);
     }
   };
 
-  // 1. Chụp khung hình từ camera và thực hiện nhận diện OCR
+  // 1. Chụp ảnh từ camera và đọc OCR
   const handleCaptureAndOcr = async () => {
     const videoEl = document.querySelector(`#${containerId} video`);
     if (!videoEl) {
@@ -469,7 +339,6 @@ export default function QRScannerModal({
       return;
     }
 
-    // Tạo canvas chụp frame ngay lập tức và lưu lại ảnh
     const canvas = document.createElement('canvas');
     canvas.width = videoEl.videoWidth || videoEl.clientWidth || 640;
     canvas.height = videoEl.videoHeight || videoEl.clientHeight || 480;
@@ -480,10 +349,10 @@ export default function QRScannerModal({
     setCropRect(null);
     setRescanCount(0);
 
-    await runOcrOnImageSrc(imageSrc, { mode: 'raw', customCrop: null, mergePrevious: false });
+    await runOcrOnImageSrc(imageSrc, { engine: selectedEngine, customCrop: null });
   };
 
-  // 2. Đọc OCR từ tệp ảnh người dùng tải lên
+  // 2. Tải tệp ảnh từ máy
   const handleFileUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -493,26 +362,33 @@ export default function QRScannerModal({
       const imageSrc = event.target.result;
       setCropRect(null);
       setRescanCount(0);
-      await runOcrOnImageSrc(imageSrc, { mode: 'raw', customCrop: null, mergePrevious: false });
+      await runOcrOnImageSrc(imageSrc, { engine: selectedEngine, customCrop: null });
     };
     reader.readAsDataURL(file);
     e.target.value = '';
   };
 
-  // 3. Quét lại chữ trực tiếp từ bức ảnh đã chụp (không cần mở camera chụp lại)
-  const handleRescanExistingImage = async (forcedMode = null) => {
+  // 3. Đổi Engine & Quét lại ngay lập tức
+  const handleSwitchEngineAndRescan = async (engine) => {
+    setEngine(engine);
     if (!ocrResult?.imageSrc || ocrLoading) return;
-    const nextCount = rescanCount + 1;
-    setRescanCount(nextCount);
-    const modeToUse = forcedMode || 'auto_retry';
     await runOcrOnImageSrc(ocrResult.imageSrc, {
-      mode: modeToUse,
+      engine,
       customCrop: cropRect,
-      mergePrevious: true,
     });
   };
 
-  // 4. Xoay bức ảnh đã chụp 90° và tự động quét lại chữ
+  // 4. Quét lại chữ từ ảnh hiện tại
+  const handleRescanCurrent = async () => {
+    if (!ocrResult?.imageSrc || ocrLoading) return;
+    setRescanCount((prev) => prev + 1);
+    await runOcrOnImageSrc(ocrResult.imageSrc, {
+      engine: selectedEngine,
+      customCrop: cropRect,
+    });
+  };
+
+  // 5. Xoay ảnh 90 độ và quét lại
   const handleRotateAndRescan = async () => {
     if (!ocrResult?.imageSrc || ocrLoading) return;
     try {
@@ -520,16 +396,15 @@ export default function QRScannerModal({
       const rotatedSrc = await rotateImageDataUrl(ocrResult.imageSrc, 90);
       setCropRect(null);
       await runOcrOnImageSrc(rotatedSrc, {
-        mode: 'auto_retry',
+        engine: selectedEngine,
         customCrop: null,
-        mergePrevious: false,
       });
     } catch (e) {
       setOcrLoading(false);
     }
   };
 
-  // Xử lý kéo chọn vùng chữ (Crop) trực tiếp trên ảnh đã chụp
+  // Kéo khoanh vùng (Crop)
   const getNormalizedPoint = (clientX, clientY) => {
     const el = previewImgWrapRef.current;
     if (!el) return { x: 0, y: 0 };
@@ -566,12 +441,10 @@ export default function QRScannerModal({
     if (!isDraggingCrop) return;
     setIsDraggingCrop(false);
     if (cropRect && (cropRect.w < 0.05 || cropRect.h < 0.04)) {
-      // Nếu chỉ chạm nhẹ (không kéo đủ rộng) thì hủy vùng chọn
       setCropRect(null);
     }
   };
 
-  // Sao chép mã
   const handleCopy = async (text) => {
     const ok = await copyText(text);
     if (ok) {
@@ -580,7 +453,6 @@ export default function QRScannerModal({
     }
   };
 
-  // Áp dụng mã và đóng modal
   const handleApply = (code) => {
     if (navigator.vibrate) navigator.vibrate(80);
     playSuccessSound();
@@ -589,7 +461,6 @@ export default function QRScannerModal({
     onClose();
   };
 
-  // Quay lại camera tiếp tục quét
   const handleRetake = () => {
     setOcrResult(null);
     setCropRect(null);
@@ -598,24 +469,47 @@ export default function QRScannerModal({
     }
   };
 
+  const handleSaveApiKeys = () => {
+    setSavedGeminiKey(geminiKeyInput);
+    setSavedOcrSpaceKey(ocrSpaceKeyInput);
+    setShowConfigModal(false);
+  };
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[99999] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+    <div className="fixed inset-0 z-[99999] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fade-in">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2">
-            {ocrResult ? (
-              <Sparkles className="w-5 h-5 text-indigo-600" />
-            ) : (
-              <Camera className="w-5 h-5 text-indigo-600" />
-            )}
-            <h3 className="text-sm font-bold text-slate-800">
-              {ocrResult ? 'Kết quả đọc chữ OCR' : title}
-            </h3>
+            <div className="p-1.5 rounded-lg bg-indigo-100 text-indigo-700">
+              {ocrResult ? <Sparkles className="w-4 h-4" /> : <Camera className="w-4 h-4" />}
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-800">
+                {ocrResult ? 'Kết quả nhận diện OCR' : title}
+              </h3>
+              <p className="text-[10px] text-slate-500">
+                {ocrResult ? ocrResult.scanModeLabel : 'Hỗ trợ quét Barcode & đọc chữ OCR siêu nét'}
+              </p>
+            </div>
           </div>
+
           <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setShowConfigModal(!showConfigModal)}
+              title="Cài đặt Engine & API Key"
+              className={`p-1.5 rounded-lg transition-colors ${
+                showConfigModal
+                  ? 'bg-indigo-100 text-indigo-700'
+                  : 'text-slate-400 hover:text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+
             {!ocrResult && hasFlash && (
               <button
                 type="button"
@@ -627,9 +521,10 @@ export default function QRScannerModal({
                     : 'text-slate-500 hover:text-indigo-600 hover:bg-slate-200'
                 }`}
               >
-                {torchOn ? <Zap className="w-5 h-5" /> : <ZapOff className="w-5 h-5" />}
+                {torchOn ? <Zap className="w-4 h-4" /> : <ZapOff className="w-4 h-4" />}
               </button>
             )}
+
             {!ocrResult && cameras.length > 1 && (
               <button
                 type="button"
@@ -637,9 +532,10 @@ export default function QRScannerModal({
                 title="Đổi camera"
                 className="p-1.5 text-slate-500 hover:text-indigo-600 rounded-lg transition-colors hover:bg-slate-200"
               >
-                <SwitchCamera className="w-5 h-5" />
+                <SwitchCamera className="w-4 h-4" />
               </button>
             )}
+
             <button
               type="button"
               onClick={() => {
@@ -648,9 +544,123 @@ export default function QRScannerModal({
               }}
               className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg transition-colors hover:bg-slate-200"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
+        </div>
+
+        {/* Cửa sổ Cài đặt Engine & API Key nếu bấm nút Bánh răng */}
+        {showConfigModal && (
+          <div className="bg-indigo-50/90 border-b border-indigo-100 p-3.5 space-y-3 text-xs animate-in slide-in-from-top-2 duration-150">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-indigo-950 flex items-center gap-1.5">
+                <Sliders className="w-4 h-4 text-indigo-600" />
+                <span>Cấu hình công nghệ OCR & AI Vision</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowConfigModal(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Chọn Engine mặc định */}
+            <div>
+              <label className="font-bold text-slate-700 block mb-1">
+                Công nghệ OCR mặc định khi chụp/tải ảnh:
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                {[
+                  { id: 'cloud', label: '⚡ OCR Cloud', desc: 'Chuẩn số & tem' },
+                  { id: 'barcode', label: '📷 Quét Barcode', desc: 'Dò mã vạch 1D/QR' },
+                  { id: 'gemini', label: '🤖 AI Gemini', desc: 'Trí tuệ nhân tạo' },
+                  { id: 'offline', label: '💻 Tesseract', desc: 'Offline máy' },
+                ].map((eng) => (
+                  <button
+                    key={eng.id}
+                    type="button"
+                    onClick={() => setEngine(eng.id)}
+                    className={`p-2 rounded-xl border text-left transition-all ${
+                      selectedEngine === eng.id
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs font-bold'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="text-[11px] font-bold">{eng.label}</div>
+                    <div className="text-[9px] opacity-80">{eng.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Gemini API Key */}
+            <div className="bg-white p-2.5 rounded-xl border border-slate-200 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="font-bold text-slate-800 flex items-center gap-1 text-[11px]">
+                  <Key className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Google Gemini API Key (Tùy chọn):</span>
+                </label>
+                <a
+                  href="https://aistudio.google.com/app/apikey"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-indigo-600 hover:underline flex items-center gap-0.5 text-[10px]"
+                >
+                  <span>Lấy key miễn phí</span>
+                  <ExternalLink className="w-2.5 h-2.5" />
+                </a>
+              </div>
+              <input
+                type="password"
+                placeholder="Dán AIzaSy... để kích hoạt AI Vision đọc siêu chuẩn"
+                value={geminiKeyInput}
+                onChange={(e) => setGeminiKeyInput(e.target.value)}
+                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono outline-none focus:border-indigo-500"
+              />
+              <p className="text-[10px] text-slate-500">
+                Key được lưu an toàn trên trình duyệt của bạn, không chia sẻ cho bên thứ ba.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={handleSaveApiKeys}
+                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer"
+              >
+                Lưu cấu hình
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* THANH CHỌN NHANH CÔNG NGHỆ OCR (CHO PHÉP CHUYỂN ĐỔI NGAY LẬP TỨC) */}
+        <div className="px-3 py-2 bg-slate-100/80 border-b border-slate-200 flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0">
+          <span className="text-[10px] font-bold text-slate-400 uppercase shrink-0 mr-1">
+            Đọc bằng:
+          </span>
+          {[
+            { id: 'cloud', label: '⚡ OCR Cloud', title: 'OCR Cloud Engine 2 chuyên trị tem nhãn, không nhầm 0/O' },
+            { id: 'barcode', label: '📷 Barcode/QR', title: 'Dò mã vạch 1D & QR trực tiếp trên tem (chính xác 100%)' },
+            { id: 'gemini', label: '🤖 AI Gemini', title: 'Trí tuệ nhân tạo Gemini bóc tách thông minh' },
+            { id: 'offline', label: '💻 Tesseract', title: 'Đọc offline nội bộ khi mất mạng' },
+          ].map((eng) => (
+            <button
+              key={eng.id}
+              type="button"
+              title={eng.title}
+              onClick={() => handleSwitchEngineAndRescan(eng.id)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                selectedEngine === eng.id
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'bg-white text-slate-600 hover:bg-slate-200/80 border border-slate-200'
+              }`}
+            >
+              {eng.label}
+            </button>
+          ))}
         </div>
 
         {/* Nội dung chính */}
@@ -672,7 +682,7 @@ export default function QRScannerModal({
                     <div className="absolute inset-0 bg-slate-900/85 backdrop-blur-sm z-30 flex flex-col items-center justify-center p-4 text-center">
                       <Loader2 className="w-10 h-10 text-indigo-400 animate-spin mb-3" />
                       <p className="text-white text-sm font-semibold">Đang nhận diện chữ (OCR)...</p>
-                      <p className="text-indigo-300 text-xs mt-1">{ocrProgress}% hoàn thành</p>
+                      <p className="text-indigo-300 text-xs mt-1">{ocrStatusText || `${ocrProgress}% hoàn thành`}</p>
                       <div className="w-48 bg-slate-700 rounded-full h-1.5 mt-3 overflow-hidden">
                         <div
                           className="bg-indigo-500 h-1.5 transition-all duration-200"
@@ -686,16 +696,16 @@ export default function QRScannerModal({
             </div>
           )}
 
-          {/* MÀN HÌNH 2: KẾT QUẢ OCR SAU KHI CHỤP (CÓ QUÉT LẠI TRÊN ẢNH ĐÃ CHỤP) */}
+          {/* MÀN HÌNH 2: KẾT QUẢ OCR SAU KHI CHỤP / TẢI ẢNH */}
           {ocrResult && (
             <div className="p-4 space-y-3.5 bg-slate-50 min-h-[320px]">
-              {/* Khung ảnh đã chụp + Hỗ trợ kéo khoanh vùng chữ + Các nút Quét lại ngay trên ảnh */}
+              {/* Khung ảnh đã chụp + Hỗ trợ kéo khoanh vùng chữ + Các nút Quét lại */}
               {ocrResult.imageSrc && (
                 <div className="bg-white rounded-xl border border-slate-200 p-2.5 shadow-2xs space-y-2">
                   <div className="flex items-center justify-between gap-2 text-[11px]">
                     <span className="font-bold text-slate-700 flex items-center gap-1">
                       <Crop className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>Ảnh đã chụp (Có thể kéo khoanh vùng chữ để quét lại)</span>
+                      <span>Ảnh đang đọc (Kéo chuột/chạm để khoanh vùng chữ)</span>
                     </span>
                     {cropRect && (
                       <button
@@ -747,41 +757,30 @@ export default function QRScannerModal({
                       </div>
                     )}
 
-                    {/* Lớp phủ loading khi đang Quét lại chữ trong ảnh */}
+                    {/* Lớp phủ loading khi đang Quét lại */}
                     {ocrLoading && (
                       <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-xs z-20 flex flex-col items-center justify-center p-3 text-center">
                         <Loader2 className="w-8 h-8 text-indigo-400 animate-spin mb-1.5" />
                         <p className="text-white text-xs font-bold">
-                          Đang quét lại chữ trong ảnh ({ocrProgress}%)...
+                          {ocrStatusText || `Đang xử lý (${ocrProgress}%)...`}
                         </p>
                       </div>
                     )}
                   </div>
 
-                  {/* Thanh công cụ Quét lại trực tiếp từ ảnh đã chụp (Không cần chụp lại) */}
+                  {/* Thanh công cụ Quét lại trực tiếp từ ảnh này */}
                   <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                     <button
                       type="button"
                       disabled={ocrLoading}
-                      onClick={() => handleRescanExistingImage('auto_retry')}
-                      className="flex-1 min-w-[160px] py-2 px-3 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer"
-                      title="Quét lại chữ từ bức ảnh này với chế độ làm nét & tăng tương phản (không cần chụp lại)"
+                      onClick={handleRescanCurrent}
+                      className="flex-1 min-w-[150px] py-2 px-3 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                      title="Quét lại ảnh này với Engine đang chọn"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${ocrLoading ? 'animate-spin' : ''}`} />
                       <span>
-                        {cropRect ? 'Quét lại vùng đã chọn' : 'Quét lại chữ trong ảnh'}
+                        {cropRect ? 'Quét lại vùng chọn' : 'Quét lại ảnh này'}
                       </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={ocrLoading}
-                      onClick={() => handleRescanExistingImage('bw')}
-                      className="py-2 px-2.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
-                      title="Chuyển ảnh sang Đen - Trắng độ tương phản cao rồi quét lại"
-                    >
-                      <ScanText className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>Đen trắng</span>
                     </button>
 
                     <button
@@ -789,7 +788,7 @@ export default function QRScannerModal({
                       disabled={ocrLoading}
                       onClick={handleRotateAndRescan}
                       className="py-2 px-2.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
-                      title="Xoay ảnh 90 độ và quét lại chữ"
+                      title="Xoay ảnh 90 độ và quét lại"
                     >
                       <RotateCw className="w-3.5 h-3.5 text-slate-600" />
                       <span>Xoay 90°</span>
@@ -806,86 +805,153 @@ export default function QRScannerModal({
                 </div>
               )}
 
-              {/* Danh sách mã vận đơn / mã số tìm thấy */}
+              {/* Nếu AI Gemini trả về cấu trúc chi tiết */}
+              {ocrResult.structured && (
+                <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-xl p-3 space-y-1.5">
+                  <div className="font-bold text-indigo-950 text-xs flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-purple-600" />
+                    <span>AI Vision đã bóc tách:</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {ocrResult.structured.mvd && (
+                      <div className="bg-white p-2 rounded-lg border border-indigo-100">
+                        <span className="text-[10px] text-slate-400 block font-semibold">MVD:</span>
+                        <span className="font-mono font-bold text-indigo-700">{ocrResult.structured.mvd}</span>
+                      </div>
+                    )}
+                    {ocrResult.structured.mdh && (
+                      <div className="bg-white p-2 rounded-lg border border-indigo-100">
+                        <span className="text-[10px] text-slate-400 block font-semibold">MDH:</span>
+                        <span className="font-mono font-bold text-slate-800">{ocrResult.structured.mdh}</span>
+                      </div>
+                    )}
+                    {ocrResult.structured.sku && (
+                      <div className="bg-white p-2 rounded-lg border border-indigo-100">
+                        <span className="text-[10px] text-slate-400 block font-semibold">SKU:</span>
+                        <span className="font-mono font-bold text-emerald-700">{ocrResult.structured.sku}</span>
+                      </div>
+                    )}
+                    {ocrResult.structured.ma_gian && (
+                      <div className="bg-white p-2 rounded-lg border border-indigo-100">
+                        <span className="text-[10px] text-slate-400 block font-semibold">Gian:</span>
+                        <span className="font-bold text-slate-700">{ocrResult.structured.ma_gian}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Danh sách mã phát hiện được */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                     <Sparkles className="w-4 h-4 text-amber-500" />
-                    Mã phát hiện được ({ocrResult.candidates.length}):
+                    Mã phát hiện được ({ocrResult.candidates?.length || 0}):
                   </span>
                   <span className="text-[11px] text-slate-500">Chạm sao chép hoặc áp dụng</span>
                 </div>
 
-                {ocrResult.candidates.length > 0 ? (
+                {ocrResult.candidates && ocrResult.candidates.length > 0 ? (
                   <div className="space-y-2">
-                    {ocrResult.candidates.map((code, idx) => (
-                      <div
-                        key={idx}
-                        className="bg-white border border-slate-200 hover:border-indigo-300 rounded-xl p-3 flex items-center justify-between gap-2 shadow-sm transition-all"
-                      >
-                        <div className="font-mono text-sm font-bold text-slate-900 tracking-wide break-all">
-                          {code}
+                    {ocrResult.candidates.map((code, idx) => {
+                      const isMvd =
+                        (ocrResult.mvdList && ocrResult.mvdList.includes(code)) ||
+                        /^SPX|GHN|GHTK|JNT|LEX|VTP/i.test(code);
+                      const isMdh =
+                        (ocrResult.mdhList && ocrResult.mdhList.includes(code)) ||
+                        /^\d{6}[A-Z0-9]{6,}/i.test(code);
+                      const isSku =
+                        ocrResult.skuList && ocrResult.skuList.includes(code);
+
+                      return (
+                        <div
+                          key={idx}
+                          className="bg-white border border-slate-200 hover:border-indigo-300 rounded-xl p-3 flex items-center justify-between gap-2 shadow-xs transition-all"
+                        >
+                          <div className="space-y-0.5 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              {isMvd && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-700 border border-indigo-200">
+                                  Mã Vận Đơn
+                                </span>
+                              )}
+                              {isMdh && !isMvd && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-700 border border-amber-200">
+                                  Mã Đơn
+                                </span>
+                              )}
+                              {isSku && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-700 border border-emerald-200">
+                                  SKU
+                                </span>
+                              )}
+                            </div>
+                            <div className="font-mono text-sm font-bold text-slate-900 tracking-wide break-all">
+                              {code}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleCopy(code)}
+                              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 transition-all ${
+                                copiedCode === code
+                                  ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                              }`}
+                              title="Sao chép mã"
+                            >
+                              {copiedCode === code ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span>Đã chép</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3.5 h-3.5" />
+                                  <span>Sao chép</span>
+                                </>
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleApply(code)}
+                              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1 shadow-xs transition-all cursor-pointer"
+                              title="Điền mã này vào tìm kiếm"
+                            >
+                              <span>Dùng mã</span>
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => handleCopy(code)}
-                            className={`px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 transition-all ${
-                              copiedCode === code
-                                ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
-                                : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                            }`}
-                            title="Sao chép mã"
-                          >
-                            {copiedCode === code ? (
-                              <>
-                                <Check className="w-3.5 h-3.5 text-emerald-600" />
-                                <span>Đã chép</span>
-                              </>
-                            ) : (
-                              <>
-                                <Copy className="w-3.5 h-3.5" />
-                                <span>Sao chép</span>
-                              </>
-                            )}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleApply(code)}
-                            className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1 shadow-sm transition-all"
-                            title="Điền mã này vào tìm kiếm"
-                          >
-                            <span>Dùng mã</span>
-                            <ArrowRight className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 flex items-start gap-2">
                     <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
                     <div>
-                      Chưa lọc được mã vận đơn chuẩn. Bạn có thể bấm <b>"Quét lại chữ trong ảnh"</b> (hoặc kéo khoanh vùng dòng chữ trên ảnh rồi bấm Quét lại) mà không cần chụp lại ảnh mới.
+                      Chưa lọc được mã tự động. Bạn có thể bấm chọn <b>"⚡ OCR Cloud"</b> hoặc <b>"📷 Barcode/QR"</b> ở thanh trên, hoặc khoanh vùng dòng chữ trên ảnh rồi bấm Quét lại.
                     </div>
                   </div>
                 )}
               </div>
 
               {/* Toàn bộ văn bản đọc được */}
-              <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-sm">
+              <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-xs">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold text-slate-700">Toàn bộ văn bản đọc được:</span>
                   {ocrResult.fullText && (
                     <button
                       type="button"
                       onClick={() => handleCopy(ocrResult.fullText)}
-                      className="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1"
+                      className="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1 cursor-pointer"
                     >
                       {copiedCode === ocrResult.fullText ? (
                         <>
                           <Check className="w-3 h-3 text-emerald-600" />
-                          <span className="text-emerald-600">Đã chép hết</span>
+                          <span className="text-emerald-600">Đã chép</span>
                         </>
                       ) : (
                         <>
@@ -913,17 +979,17 @@ export default function QRScannerModal({
                   type="button"
                   disabled={ocrLoading || !scanning}
                   onClick={handleCaptureAndOcr}
-                  className="flex-1 py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] disabled:opacity-50 text-white rounded-xl font-bold text-sm shadow-md hover:shadow-indigo-500/25 flex items-center justify-center gap-2 transition-all"
+                  className="flex-1 py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] disabled:opacity-50 text-white rounded-xl font-bold text-sm shadow-md hover:shadow-indigo-500/25 flex items-center justify-center gap-2 transition-all cursor-pointer"
                 >
                   {ocrLoading ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Đang đọc chữ ({ocrProgress}%)...</span>
+                      <span>{ocrStatusText || `Đang đọc (${ocrProgress}%)...`}</span>
                     </>
                   ) : (
                     <>
                       <ScanText className="w-4 h-4" />
-                      <span>Chụp & Đọc chữ (OCR)</span>
+                      <span>Chụp & Đọc chữ ({selectedEngine === 'cloud' ? 'OCR Cloud' : selectedEngine === 'barcode' ? 'Barcode' : selectedEngine === 'gemini' ? 'AI Vision' : 'Offline'})</span>
                     </>
                   )}
                 </button>
@@ -932,7 +998,7 @@ export default function QRScannerModal({
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   title="Tải ảnh từ máy để đọc OCR"
-                  className="p-2.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
+                  className="p-2.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <Upload className="w-4 h-4 text-slate-500" />
                   <span className="hidden sm:inline">Tải ảnh</span>
@@ -949,7 +1015,7 @@ export default function QRScannerModal({
               <p className="text-[11px] text-slate-500 text-center">
                 {continuous
                   ? 'Chế độ quét liên tục - Đưa mã vào khung hình'
-                  : 'Đặt mã vạch/QR vào khung hoặc bấm nút Chụp để đọc chữ số'}
+                  : 'Đặt mã vạch/QR vào khung hoặc bấm Chụp & Đọc chữ'}
               </p>
             </div>
           ) : (
@@ -957,7 +1023,7 @@ export default function QRScannerModal({
               <button
                 type="button"
                 disabled={ocrLoading}
-                onClick={() => handleRescanExistingImage('auto_retry')}
+                onClick={handleRescanCurrent}
                 className="flex-1 py-2 px-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
               >
                 <RefreshCw className={`w-4 h-4 ${ocrLoading ? 'animate-spin' : ''}`} />
@@ -978,7 +1044,7 @@ export default function QRScannerModal({
                   stopScanner();
                   onClose();
                 }}
-                className="py-2 px-3.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-xl font-medium text-xs transition-colors"
+                className="py-2 px-3.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-xl font-medium text-xs transition-colors cursor-pointer"
               >
                 Đóng
               </button>

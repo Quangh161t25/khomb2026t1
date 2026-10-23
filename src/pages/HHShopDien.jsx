@@ -17,7 +17,11 @@ import { exportToExcel } from '../services/excelExport';
 import { toYMD, formatYmdToDmy } from '../utils/dateUtils';
 import { matchMultiKeyword } from '../utils/searchUtils';
 import { useAutoSync } from '../hooks/useAutoSync';
-import Tesseract from 'tesseract.js';
+import {
+  recognizeImage,
+  getPreferredOcrEngine,
+  setPreferredOcrEngine,
+} from '../services/ocrService';
 import {
   Search,
   RotateCw,
@@ -44,31 +48,6 @@ import {
   Copy,
   ExternalLink
 } from 'lucide-react';
-
-// Helper trích xuất mã tiềm năng từ OCR text
-function extractOcrCandidates(rawText) {
-  if (!rawText) return [];
-  const candidates = new Set();
-  const spxMatches = rawText.match(/SPX[A-Z0-9]{8,25}/gi) || [];
-  spxMatches.forEach((m) => candidates.add(m.trim().toUpperCase()));
-
-  const courierMatches = rawText.match(/(?:GHN|GHTK|JNT|LEX|LZD|VTP|TKM)[A-Z0-9]{5,20}/gi) || [];
-  courierMatches.forEach((m) => candidates.add(m.trim().toUpperCase()));
-
-  const tokenMatches = rawText.match(/\b[A-Za-z0-9_-]{8,26}\b/g) || [];
-  tokenMatches.forEach((token) => {
-    const clean = token.replace(/^[_\-]+|[_\-]+$/g, '').toUpperCase();
-    const digitCount = (clean.match(/\d/g) || []).length;
-    if (clean.length >= 8 && clean.length <= 26 && digitCount >= 2) {
-      candidates.add(clean);
-    }
-  });
-
-  const numericMatches = rawText.match(/\b\d{9,18}\b/g) || [];
-  numericMatches.forEach((num) => candidates.add(num.trim()));
-
-  return Array.from(candidates);
-}
 
 export default function HHShopDienPage() {
   const { user } = useAuth();
@@ -142,8 +121,14 @@ export default function HHShopDienPage() {
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
   const [ocrCandidates, setOcrCandidates] = useState([]);
+  const [ocrMvdList, setOcrMvdList] = useState([]);
+  const [ocrMdhList, setOcrMdhList] = useState([]);
+  const [ocrSkuList, setOcrSkuList] = useState([]);
+  const [ocrStructured, setOcrStructured] = useState(null);
+  const [ocrEngineLabel, setOcrEngineLabel] = useState('');
   const [ocrFullText, setOcrFullText] = useState('');
   const [showOcrBox, setShowOcrBox] = useState(false);
+  const [selectedOcrEngine, setSelectedOcrEngine] = useState(getPreferredOcrEngine);
   const fileInputRef = useRef(null);
 
   // 1. Tải toàn bộ dữ liệu (HH_SHOP_DIEN, HH_BH, UD_CT)
@@ -519,45 +504,104 @@ export default function HHShopDienPage() {
     return () => window.removeEventListener('paste', handlePaste);
   }, [isDrawerOpen, formData.mvd, formData.mdh]);
 
-  // 6. Đọc chữ OCR từ ảnh đính kèm
-  const handleRunOcrOnImage = async () => {
+  // 6. Đọc chữ OCR từ ảnh đính kèm bằng hệ thống đa tầng
+  const handleRunOcrOnImage = async (engineOverride = null) => {
     const imgSource = imagePreviewUrl || formData.anh;
     if (!imgSource) {
       showToast('Chưa có ảnh để đọc chữ OCR!', 'warning');
       return;
     }
 
+    const engineToUse = engineOverride || selectedOcrEngine;
     setOcrLoading(true);
-    setOcrProgress(0);
+    setOcrProgress(15);
     setShowOcrBox(true);
 
     try {
-      const res = await Tesseract.recognize(imgSource, 'eng', {
-        logger: (m) => {
-          if (m.status === 'recognizing text' && typeof m.progress === 'number') {
-            setOcrProgress(Math.round(m.progress * 100));
-          }
-        },
+      const result = await recognizeImage(imgSource, {
+        engine: engineToUse,
+        onProgress: (pct) => setOcrProgress(pct),
       });
 
-      const fullText = (res?.data?.text || '').trim();
-      const candidates = extractOcrCandidates(fullText);
+      const fullText = result.fullText || '';
+      const candidates = result.candidates || [];
+      const mvdList = result.mvdList || [];
+      const mdhList = result.mdhList || [];
+      const skuList = result.skuList || [];
 
       setOcrFullText(fullText);
       setOcrCandidates(candidates);
+      setOcrMvdList(mvdList);
+      setOcrMdhList(mdhList);
+      setOcrSkuList(skuList);
+      setOcrStructured(result.structured || null);
+      setOcrEngineLabel(result.engineLabel || '');
 
-      // Nếu tìm thấy mã vận đơn tiềm năng và ô MVD đang trống, tự động điền luôn
-      if (candidates.length > 0 && !formData.mvd) {
+      // Tự động điền nếu ô MVD đang trống
+      if (mvdList.length > 0 && !formData.mvd) {
+        handleMvdChange(mvdList[0]);
+        showToast(`Đã nhận diện và điền MVD: ${mvdList[0]}`, 'success');
+      } else if (candidates.length > 0 && !formData.mvd) {
         handleMvdChange(candidates[0]);
         showToast(`Đã nhận diện và điền MVD: ${candidates[0]}`, 'success');
       } else {
-        showToast(`OCR hoàn tất, tìm thấy ${candidates.length} mã khả dụng!`, 'info');
+        showToast(`OCR hoàn tất bằng ${result.engineLabel}, tìm thấy ${candidates.length} mã!`, 'info');
       }
     } catch (err) {
       console.error('OCR Error:', err);
       showToast('Có lỗi khi đọc chữ OCR: ' + err.message, 'error');
     } finally {
       setOcrLoading(false);
+    }
+  };
+
+  // Tự động điền nhanh tất cả các trường từ kết quả OCR
+  const handleAutoFillFromOcr = () => {
+    let filledCount = 0;
+    if (ocrStructured) {
+      if (ocrStructured.mvd && !formData.mvd) {
+        handleMvdChange(ocrStructured.mvd);
+        filledCount++;
+      }
+      if (ocrStructured.mdh && !formData.mdh) {
+        handleMdhChange(ocrStructured.mdh);
+        filledCount++;
+      }
+      if (ocrStructured.sku && !formData.sku) {
+        setFormData((prev) => ({
+          ...prev,
+          sku: ocrStructured.sku,
+          sku_tra: prev.sku_tra || ocrStructured.sku,
+        }));
+        filledCount++;
+      }
+      if (ocrStructured.ma_gian && !formData.ma_gian) {
+        setFormData((prev) => ({ ...prev, ma_gian: ocrStructured.ma_gian }));
+        filledCount++;
+      }
+    } else {
+      if (ocrMvdList.length > 0 && !formData.mvd) {
+        handleMvdChange(ocrMvdList[0]);
+        filledCount++;
+      }
+      if (ocrMdhList.length > 0 && !formData.mdh) {
+        handleMdhChange(ocrMdhList[0]);
+        filledCount++;
+      }
+      if (ocrSkuList.length > 0 && !formData.sku) {
+        setFormData((prev) => ({
+          ...prev,
+          sku: ocrSkuList[0],
+          sku_tra: prev.sku_tra || ocrSkuList[0],
+        }));
+        filledCount++;
+      }
+    }
+
+    if (filledCount > 0) {
+      showToast(`Đã tự động điền ${filledCount} trường thông tin từ ảnh!`, 'success');
+    } else {
+      showToast('Các ô đã có dữ liệu hoặc không tìm thấy trường phù hợp', 'info');
     }
   };
 
@@ -1712,26 +1756,67 @@ export default function HHShopDienPage() {
                       </button>
                     </div>
 
-                    {/* Nút bấm Đọc OCR từ ảnh */}
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        disabled={ocrLoading}
-                        onClick={handleRunOcrOnImage}
-                        className="flex-1 py-1.5 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
-                      >
-                        {ocrLoading ? (
-                          <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            <span>Đang đọc chữ OCR ({ocrProgress}%)...</span>
-                          </>
-                        ) : (
-                          <>
-                            <ScanText className="w-3.5 h-3.5 text-indigo-600" />
-                            <span>Đọc chữ từ ảnh (OCR)</span>
-                          </>
-                        )}
-                      </button>
+                    {/* Bộ chọn Engine OCR và Nút bấm Đọc OCR từ ảnh */}
+                    <div className="space-y-1.5 pt-1">
+                      <div className="flex items-center justify-between text-[11px] text-slate-500">
+                        <span className="font-semibold">Công nghệ đọc:</span>
+                        <span className="text-[10px] text-indigo-600 font-bold">
+                          {selectedOcrEngine === 'cloud'
+                            ? '⚡ OCR Cloud (Chuyên tem nhãn & số)'
+                            : selectedOcrEngine === 'barcode'
+                            ? '📷 Dò Barcode/QR từ ảnh'
+                            : selectedOcrEngine === 'gemini'
+                            ? '🤖 AI Gemini Vision'
+                            : '💻 Tesseract Offline'}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-4 gap-1">
+                        {[
+                          { id: 'cloud', label: '⚡ Cloud' },
+                          { id: 'barcode', label: '📷 Barcode' },
+                          { id: 'gemini', label: '🤖 AI' },
+                          { id: 'offline', label: '💻 Offline' },
+                        ].map((eng) => (
+                          <button
+                            key={eng.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedOcrEngine(eng.id);
+                              setPreferredOcrEngine(eng.id);
+                              handleRunOcrOnImage(eng.id);
+                            }}
+                            className={`py-1 px-1.5 rounded-lg text-[11px] font-bold border transition-all ${
+                              selectedOcrEngine === eng.id
+                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+                                : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border-slate-200'
+                            }`}
+                          >
+                            {eng.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-0.5">
+                        <button
+                          type="button"
+                          disabled={ocrLoading}
+                          onClick={() => handleRunOcrOnImage()}
+                          className="flex-1 py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+                        >
+                          {ocrLoading ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span>Đang đọc chữ OCR ({ocrProgress}%)...</span>
+                            </>
+                          ) : (
+                            <>
+                              <ScanText className="w-3.5 h-3.5" />
+                              <span>Đọc chữ từ ảnh (OCR)</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -1744,49 +1829,114 @@ export default function HHShopDienPage() {
                       Bấm để tải ảnh hoặc nhấn <strong>Ctrl + V</strong> để dán ảnh chụp
                     </span>
                     <span className="text-[10px] text-slate-400 mt-0.5">
-                      Hỗ trợ đọc OCR lấy mã vận đơn trực tiếp từ ảnh
+                      Hỗ trợ OCR Cloud, Barcode & AI đọc mã vận đơn trực tiếp từ ảnh
                     </span>
                   </div>
                 )}
 
                 {/* Kết quả OCR từ ảnh */}
                 {showOcrBox && (ocrCandidates.length > 0 || ocrFullText) && (
-                  <div className="bg-white border border-indigo-200 rounded-xl p-2.5 space-y-2 mt-2">
+                  <div className="bg-white border border-indigo-200 rounded-xl p-3 space-y-2.5 mt-2 shadow-2xs">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-indigo-900 flex items-center gap-1">
-                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                        Mã phát hiện được từ ảnh ({ocrCandidates.length}):
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-amber-500" />
+                        <span className="text-xs font-bold text-indigo-950">
+                          Kết quả đọc được ({ocrCandidates.length} mã):
+                        </span>
+                      </div>
                       <button
                         type="button"
                         onClick={() => setShowOcrBox(false)}
-                        className="text-slate-400 hover:text-slate-600"
+                        className="text-slate-400 hover:text-slate-600 p-0.5 rounded"
                       >
-                        <X className="w-3.5 h-3.5" />
+                        <X className="w-4 h-4" />
                       </button>
                     </div>
 
+                    {/* Nút bấm Tự động điền tất cả */}
+                    {(ocrMvdList.length > 0 || ocrMdhList.length > 0 || ocrSkuList.length > 0 || ocrStructured) && (
+                      <div className="bg-indigo-50/70 border border-indigo-100 rounded-lg p-2 flex items-center justify-between gap-2">
+                        <div className="text-[11px] text-indigo-900 font-medium">
+                          Phát hiện thông tin đơn hàng
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleAutoFillFromOcr}
+                          className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-[11px] font-bold shadow-2xs flex items-center gap-1 cursor-pointer"
+                        >
+                          <Sparkles className="w-3 h-3 text-amber-300" />
+                          <span>⚡ Tự động điền</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Danh sách mã lọc được */}
                     {ocrCandidates.length > 0 ? (
-                      <div className="flex flex-wrap gap-1.5">
-                        {ocrCandidates.map((code, idx) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => {
-                              handleMvdChange(code);
-                              showToast(`Đã điền MVD: ${code}`, 'success');
-                            }}
-                            className="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800 font-mono text-xs font-bold flex items-center gap-1 transition-colors"
-                            title="Bấm để điền vào ô MVD"
-                          >
-                            <span>{code}</span>
-                            <ArrowRight className="w-3 h-3 text-indigo-500" />
-                          </button>
-                        ))}
+                      <div className="space-y-1.5">
+                        {ocrCandidates.map((code, idx) => {
+                          const isMvd = ocrMvdList.includes(code) || /^SPX|GHN|GHTK|JNT|LEX|VTP/i.test(code);
+                          const isMdh = ocrMdhList.includes(code) || /^\d{6}[A-Z0-9]{6,}/i.test(code);
+                          const isSku = ocrSkuList.includes(code);
+
+                          return (
+                            <div
+                              key={idx}
+                              className="p-2 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between gap-2"
+                            >
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1 mb-0.5">
+                                  {isMvd && (
+                                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-700">
+                                      MVD
+                                    </span>
+                                  )}
+                                  {isMdh && !isMvd && (
+                                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-700">
+                                      MDH
+                                    </span>
+                                  )}
+                                  {isSku && (
+                                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-700">
+                                      SKU
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="font-mono text-xs font-bold text-slate-800 break-all">
+                                  {code}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleMvdChange(code);
+                                    showToast(`Đã điền vào ô MVD: ${code}`, 'success');
+                                  }}
+                                  className="px-2 py-1 bg-white hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 text-indigo-700 rounded text-[11px] font-bold"
+                                  title="Điền vào ô Mã Vận Đơn"
+                                >
+                                  MVD
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleMdhChange(code);
+                                    showToast(`Đã điền vào ô MDH: ${code}`, 'success');
+                                  }}
+                                  className="px-2 py-1 bg-white hover:bg-amber-50 border border-slate-200 hover:border-amber-300 text-amber-700 rounded text-[11px] font-bold"
+                                  title="Điền vào ô Mã Đơn Hàng"
+                                >
+                                  MDH
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     ) : (
                       <div className="text-[11px] text-slate-500">
-                        Chưa tự động lọc được mã chuẩn. Bạn có thể xem toàn bộ text bên dưới:
+                        Chưa tự động lọc được mã chuẩn. Bạn có thể bấm chọn <b>⚡ Cloud</b> hoặc <b>📷 Barcode</b> bên trên để quét lại.
                       </div>
                     )}
 
