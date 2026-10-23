@@ -31,10 +31,30 @@ export default function HangHoanDrawer({
   hangHoanData = [],
   onOpenQrScan,
   onOpenImagePreview,
+  autoScan = false,
 }) {
   const { currentUser } = useAuth();
   const toast = useToast();
   const isKinhDoanh = currentUser?.role === 'kinhdoanh';
+
+
+  // Tự động mở quét mã QR / Barcode khi mở Drawer từ nút "Quét MVD"
+  useEffect(() => {
+    if (isOpen && autoScan && !autoScanTriggeredRef.current) {
+      autoScanTriggeredRef.current = true;
+      const timer = setTimeout(() => {
+        if (onOpenQrScan) {
+          onOpenQrScan((code) => {
+            handleMvdChange(code);
+          });
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+    if (!isOpen) {
+      autoScanTriggeredRef.current = false;
+    }
+  }, [isOpen, autoScan, onOpenQrScan]);
 
   // Form State
   const [mvd, setMvd] = useState('');
@@ -58,6 +78,7 @@ export default function HangHoanDrawer({
   const [duplicateMvdNotice, setDuplicateMvdNotice] = useState('');
   const [cameraModalSlot, setCameraModalSlot] = useState(null);
   const [copiedMvd2, setCopiedMvd2] = useState(false);
+  const autoScanTriggeredRef = useRef(false);
 
   const handleCopyMvd2 = async () => {
     const val = (mvd2 || '').trim().replace(/[\r\n\t]/g, '');
@@ -391,21 +412,21 @@ export default function HangHoanDrawer({
         }
       } else {
         // mode === 'create'
-        setMvd('');
-        setMvd2('');
-        setMaGian('');
-        setSku('');
-        setSkuCt('');
-        setSlg(1);
-        setHoanTra('Hoàn');
-        setKho('KHO');
-        setTinhTrang('');
-        setTenSp('');
-        setNgayNhan(getTodayYmd());
-        setMdh('');
-        setAnh1('');
-        setAnh2('');
-        setAnh3('');
+        setMvd(initialData?.mvd || '');
+        setMvd2(initialData?.mvd_2 || '');
+        setMaGian(initialData?.ma_gian || '');
+        setSku(initialData?.sku || '');
+        setSkuCt(initialData?.sku_ct || '');
+        setSlg(parseFloat(initialData?.slg) || 1);
+        setHoanTra(initialData?.trang_thai || 'Hoàn');
+        setKho(initialData?.kho || 'KHO');
+        setTinhTrang(initialData?.tinh_trang || '');
+        setTenSp(initialData?.ten_sp || '');
+        setNgayNhan(initialData?.ngay_nhan || getTodayYmd());
+        setMdh(initialData?.id_dh || '');
+        setAnh1(initialData?.anh_1 || '');
+        setAnh2(initialData?.anh_2 || '');
+        setAnh3(initialData?.anh_3 || '');
         setHistoryText('');
       }
 
@@ -864,11 +885,19 @@ export default function HangHoanDrawer({
                   {mvd && (
                     <button
                       type="button"
-                      onClick={() => setMvd('')}
+                      onClick={() => {
+                        setMvd('');
+                        setMvdSuggestions([]);
+                      }}
                       className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
                     >
                       ✕
                     </button>
+                  )}
+                  {mvdSuggestions.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto">
+                      {mvdSuggestions.map((item, i) => renderSuggestionItem(item, 'mvd', i))}
+                    </div>
                   )}
                 </div>
                 <button

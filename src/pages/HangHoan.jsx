@@ -52,6 +52,7 @@ export default function HangHoanPage() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState('edit'); // 'create' | 'edit'
   const [selectedItem, setSelectedItem] = useState(null);
+  const [drawerAutoScan, setDrawerAutoScan] = useState(false);
 
   // Image Preview Modal
   const [previewImage, setPreviewImage] = useState('');
@@ -280,6 +281,39 @@ export default function HangHoanPage() {
     ensureUdctData();
     setSelectedItem(item);
     setDrawerMode('edit');
+    setDrawerAutoScan(false);
+    setIsDrawerOpen(true);
+  };
+
+
+  // Mở Form Thêm Mới đồng thời tự động kích hoạt máy quét QR / Barcode
+  const handleOpenCreateWithScan = () => {
+    if (user?.role === 'kinhdoanh') {
+      showToast('Tài khoản KINHDOANH không được thêm mới Dữ liệu Hàng hoàn.', 'warning');
+      return;
+    }
+    ensureSanphamData();
+    ensureUdctData();
+    setSelectedItem({
+      ngay_nhan: filters.to || filters.from || todayStr,
+      mvd: '',
+      mvd_2: '',
+      ma_gian: '',
+      anh_1: '',
+      anh_2: '',
+      anh_3: '',
+      sku: '',
+      sku_ct: '',
+      slg: '1',
+      tinh_trang: '',
+      trang_thai: 'Hoàn',
+      ten_sp: '',
+      kho: 'KHO',
+      id_dh: '',
+      ghi_chu: '',
+    });
+    setDrawerMode('create');
+    setDrawerAutoScan(true);
     setIsDrawerOpen(true);
   };
 
@@ -309,6 +343,7 @@ export default function HangHoanPage() {
       ghi_chu: '',
     });
     setDrawerMode('create');
+    setDrawerAutoScan(false);
     setIsDrawerOpen(true);
   };
 
@@ -328,6 +363,7 @@ export default function HangHoanPage() {
       ghi_chu: '',
     });
     setDrawerMode('copy');
+    setDrawerAutoScan(false);
     setIsDrawerOpen(true);
     showToast('Đã sao chép đơn: Đã xóa SKU để nhập mã mới, các thông tin khác giữ nguyên.', 'info');
   };
@@ -778,7 +814,7 @@ export default function HangHoanPage() {
         selectedCount={selectedIds.length}
         onDeleteSelected={handleDeleteSelected}
         onOpenCreate={handleOpenCreate}
-        onStartScanMvd={() => setContinuousScanOpen(true)}
+        onStartScanMvd={handleOpenCreateWithScan}
         onScanFilterQr={() => setScannerOpen(true)}
         onExportSkuTong={handleExportSkuTong}
         onExportFull={handleExportFull}
@@ -830,7 +866,11 @@ export default function HangHoanPage() {
         sanphamData={sanphamData}
         udctData={udctData}
         hangHoanData={data}
-        onClose={() => setIsDrawerOpen(false)}
+        autoScan={drawerAutoScan}
+        onClose={() => {
+          setIsDrawerOpen(false);
+          setDrawerAutoScan(false);
+        }}
         onSave={handleSave}
         onDelete={handleDelete}
         onCopy={handleCopy}
@@ -865,6 +905,7 @@ export default function HangHoanPage() {
         onScanSuccess={(val) => {
           if (drawerScanCallback) drawerScanCallback(val);
           setDrawerScanCallback(null);
+          showToast(`Đã quét mã: ${val}`, 'success');
         }}
       />
 
