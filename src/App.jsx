@@ -26,6 +26,7 @@ import BaoCaoTongPage from './pages/BaoCaoTong';
 import BCHangHoanPage from './pages/BCHangHoan';
 import HHShopDienPage from './pages/HHShopDien';
 import { fetchSheetData } from './services/googleSheetsApi';
+import { fetchAppSettingsFromSheet } from './services/appSettingsService';
 import { CONFIG } from './config/config';
 
 // Route & Metadata Configurations
@@ -155,7 +156,8 @@ function MainApp() {
           fetchSheetData(`${CONFIG.hhbhSheetName}!A:Z`),       // HH_BH cho Hàng hoàn
           fetchSheetData(`${CONFIG.dhctSheetName}!A:P`),       // DH_CT cho UP Đơn
           fetchSheetData(CONFIG.sanphamSheetName),             // SAN_PHAM chung
-          fetchSheetData(`${CONFIG.sanphamSheetName}!A:G`)     // SAN_PHAM cho UP Đơn
+          fetchSheetData(`${CONFIG.sanphamSheetName}!A:G`),     // SAN_PHAM cho UP Đơn
+          fetchAppSettingsFromSheet()                          // Tự động tải API key & cài đặt từ sheet cai_dat
         ]).then(() => {
           console.log('[Prefetch] Hoàn tất tải ngầm 100%!');
         });

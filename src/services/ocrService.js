@@ -3,6 +3,9 @@
 
 import Tesseract from 'tesseract.js';
 import { Html5Qrcode } from 'html5-qrcode';
+import { fetchAppSettingsFromSheet, saveAppSettingsToSheet } from './appSettingsService';
+
+export { fetchAppSettingsFromSheet, saveAppSettingsToSheet };
 
 export const OCR_STORAGE_KEYS = {
   GEMINI_KEY: 'app_gemini_api_key',
@@ -416,11 +419,22 @@ export async function recognizeBarcodeFromImage(imageSrc, options = {}) {
 
 export async function recognizeWithGeminiVision(imageSrc, options = {}) {
   const { onProgress, cropRect, customKey } = options;
-  const apiKey = (customKey || getSavedGeminiKey() || '').trim();
+  let apiKey = (customKey || getSavedGeminiKey() || '').trim();
+
+  // Nếu máy này chưa có key trong bộ nhớ, tự động đồng bộ ngầm từ sheet cài đặt
+  if (!apiKey) {
+    if (onProgress) onProgress(10, 'Đang lấy API Key từ Sheet cài đặt...');
+    try {
+      const synced = await fetchAppSettingsFromSheet(true);
+      if (synced?.geminiApiKey) {
+        apiKey = synced.geminiApiKey.trim();
+      }
+    } catch (e) {}
+  }
 
   if (!apiKey) {
     throw new Error(
-      'Chưa cấu hình Gemini API Key. Bạn có thể bấm vào "Cài đặt API Key" để dán key Gemini miễn phí!'
+      'Chưa cấu hình Gemini API Key. Bạn có thể bấm vào icon Cài đặt (bánh răng) để nhập key hoặc lưu key từ máy khác lên Sheet cài đặt!'
     );
   }
 

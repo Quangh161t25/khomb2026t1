@@ -9,6 +9,7 @@ export const CONFIG = {
   hhbhSheetName: "HH_BH",
   banDonSheetName: "BAN_DON",
   hhShopDienSheetName: "HH_SHOP_DIEN",
+  caiDatSheetName: "cai_dat",
   imgbbApiKey: "1bad1429a242d7040fda3f2cfddb3a25",
   catboxUserHash: "457cab18a14302fef9eba0e24",
   telegramBotToken: "8192862731:AAGitIiHpAX-4haL8Xw79WanvVa7nYc2UDI",

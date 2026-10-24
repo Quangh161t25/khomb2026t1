@@ -25,6 +25,9 @@ import {
   Key,
   ExternalLink,
   Sliders,
+  Eye,
+  EyeOff,
+  CheckCircle2,
 } from 'lucide-react';
 import { playSuccessSound } from '../../utils/audioUtils';
 import {
@@ -39,6 +42,10 @@ import {
   loadImageElement,
   extractCandidateCodes,
 } from '../../services/ocrService';
+import {
+  fetchAppSettingsFromSheet,
+  saveAppSettingsToSheet,
+} from '../../services/appSettingsService';
 
 // Xoay ảnh DataURL 90 độ
 function rotateImageDataUrl(imageSrc, degrees = 90) {
@@ -109,6 +116,10 @@ export default function QRScannerModal({
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [geminiKeyInput, setGeminiKeyInput] = useState(getSavedGeminiKey);
   const [ocrSpaceKeyInput, setOcrSpaceKeyInput] = useState(getSavedOcrSpaceKey);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [isSyncingSettings, setIsSyncingSettings] = useState(false);
+  const [syncStatusMsg, setSyncStatusMsg] = useState(null);
+  const [showKeyPassword, setShowKeyPassword] = useState(false);
 
   // Trạng thái kết quả OCR
   const [ocrLoading, setOcrLoading] = useState(false);
@@ -133,6 +144,33 @@ export default function QRScannerModal({
     setPreferredOcrEngine(engine);
   };
 
+  // Đồng bộ cấu hình & API Key từ Sheet cài đặt (cai_dat)
+  const syncSettingsFromSheet = async (forceRefresh = false) => {
+    try {
+      setIsSyncingSettings(true);
+      const res = await fetchAppSettingsFromSheet(forceRefresh);
+      if (res) {
+        if (res.geminiApiKey) {
+          setGeminiKeyInput(res.geminiApiKey);
+        }
+        if (res.ocrSpaceApiKey) {
+          setOcrSpaceKeyInput(res.ocrSpaceApiKey);
+        }
+        if (res.ocrPreferredEngine && ['auto', 'cloud', 'barcode', 'gemini', 'offline'].includes(res.ocrPreferredEngine)) {
+          setSelectedEngineState(res.ocrPreferredEngine);
+        }
+        if (res.fromSheet) {
+          setSyncStatusMsg('Đã đồng bộ cấu hình từ Sheet cài đặt!');
+          setTimeout(() => setSyncStatusMsg(null), 3000);
+        }
+      }
+    } catch (err) {
+      console.warn('Lỗi khi đồng bộ từ sheet cài đặt:', err);
+    } finally {
+      setIsSyncingSettings(false);
+    }
+  };
+
   useEffect(() => {
     if (!isOpen) {
       stopScanner();
@@ -141,8 +179,12 @@ export default function QRScannerModal({
       setCropRect(null);
       setRescanCount(0);
       setShowConfigModal(false);
+      setSyncStatusMsg(null);
       return;
     }
+
+    // Tự động kiểm tra & đồng bộ API key từ sheet cài đặt khi mở modal
+    syncSettingsFromSheet(false);
 
     let isMounted = true;
 
@@ -469,10 +511,34 @@ export default function QRScannerModal({
     }
   };
 
-  const handleSaveApiKeys = () => {
-    setSavedGeminiKey(geminiKeyInput);
-    setSavedOcrSpaceKey(ocrSpaceKeyInput);
-    setShowConfigModal(false);
+  const handleSaveApiKeys = async () => {
+    try {
+      setIsSavingSettings(true);
+      setSyncStatusMsg('Đang lưu lên Google Sheet (cai_dat)...');
+
+      // 1. Lưu vào thiết bị hiện tại
+      setSavedGeminiKey(geminiKeyInput);
+      setSavedOcrSpaceKey(ocrSpaceKeyInput);
+      setPreferredOcrEngine(selectedEngine);
+
+      // 2. Ghi đồng bộ lên Google Sheet cai_dat để các máy khác cùng dùng
+      await saveAppSettingsToSheet({
+        geminiApiKey: geminiKeyInput,
+        ocrPreferredEngine: selectedEngine,
+        ocrSpaceApiKey: ocrSpaceKeyInput,
+      });
+
+      setSyncStatusMsg('✓ Đã lưu thành công lên Sheet cài đặt & bộ nhớ máy!');
+      setTimeout(() => {
+        setShowConfigModal(false);
+        setSyncStatusMsg(null);
+      }, 1200);
+    } catch (err) {
+      console.error('Lỗi khi lưu cấu hình lên Google Sheets:', err);
+      setSyncStatusMsg('Đã lưu cục bộ nhưng lỗi đồng bộ Sheet: ' + (err.message || 'Lỗi mạng'));
+    } finally {
+      setIsSavingSettings(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -499,8 +565,14 @@ export default function QRScannerModal({
           <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={() => setShowConfigModal(!showConfigModal)}
-              title="Cài đặt Engine & API Key"
+              onClick={() => {
+                const nextState = !showConfigModal;
+                setShowConfigModal(nextState);
+                if (nextState) {
+                  syncSettingsFromSheet(true);
+                }
+              }}
+              title="Cài đặt Engine & API Key (Đồng bộ Sheet)"
               className={`p-1.5 rounded-lg transition-colors ${
                 showConfigModal
                   ? 'bg-indigo-100 text-indigo-700'
@@ -551,20 +623,46 @@ export default function QRScannerModal({
 
         {/* Cửa sổ Cài đặt Engine & API Key nếu bấm nút Bánh răng */}
         {showConfigModal && (
-          <div className="bg-indigo-50/90 border-b border-indigo-100 p-3.5 space-y-3 text-xs animate-in slide-in-from-top-2 duration-150">
+          <div className="bg-indigo-50/95 border-b border-indigo-100 p-3.5 space-y-3 text-xs animate-in slide-in-from-top-2 duration-150">
             <div className="flex items-center justify-between">
               <span className="font-bold text-indigo-950 flex items-center gap-1.5">
                 <Sliders className="w-4 h-4 text-indigo-600" />
-                <span>Cấu hình công nghệ OCR & AI Vision</span>
+                <span>Cấu hình OCR & AI Vision (Lưu Sheet cài đặt)</span>
               </span>
-              <button
-                type="button"
-                onClick={() => setShowConfigModal(false)}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => syncSettingsFromSheet(true)}
+                  disabled={isSyncingSettings}
+                  title="Tải lại API Key mới nhất từ Sheet cai_dat"
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-white text-indigo-600 border border-indigo-200 hover:bg-indigo-50 cursor-pointer transition-all"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isSyncingSettings ? 'animate-spin' : ''}`} />
+                  <span>{isSyncingSettings ? 'Đang tải...' : 'Lấy từ Sheet'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowConfigModal(false)}
+                  className="text-slate-400 hover:text-slate-600 p-0.5"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
+
+            {/* Trạng thái đồng bộ nếu có */}
+            {syncStatusMsg && (
+              <div
+                className={`p-2 rounded-lg text-[11px] font-medium flex items-center gap-1.5 ${
+                  syncStatusMsg.startsWith('✓')
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'bg-indigo-100/70 text-indigo-800 border border-indigo-200'
+                }`}
+              >
+                <Cloud className="w-3.5 h-3.5 shrink-0" />
+                <span>{syncStatusMsg}</span>
+              </div>
+            )}
 
             {/* Chọn Engine mặc định */}
             <div>
@@ -582,7 +680,7 @@ export default function QRScannerModal({
                     key={eng.id}
                     type="button"
                     onClick={() => setEngine(eng.id)}
-                    className={`p-2 rounded-xl border text-left transition-all ${
+                    className={`p-2 rounded-xl border text-left transition-all cursor-pointer ${
                       selectedEngine === eng.id
                         ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs font-bold'
                         : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
@@ -600,7 +698,7 @@ export default function QRScannerModal({
               <div className="flex items-center justify-between">
                 <label className="font-bold text-slate-800 flex items-center gap-1 text-[11px]">
                   <Key className="w-3.5 h-3.5 text-amber-500" />
-                  <span>Google Gemini API Key (Tùy chọn):</span>
+                  <span>Google Gemini API Key (Đồng bộ đa thiết bị):</span>
                 </label>
                 <a
                   href="https://aistudio.google.com/app/apikey"
@@ -612,25 +710,49 @@ export default function QRScannerModal({
                   <ExternalLink className="w-2.5 h-2.5" />
                 </a>
               </div>
-              <input
-                type="password"
-                placeholder="Dán AIzaSy... để kích hoạt AI Vision đọc siêu chuẩn"
-                value={geminiKeyInput}
-                onChange={(e) => setGeminiKeyInput(e.target.value)}
-                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono outline-none focus:border-indigo-500"
-              />
-              <p className="text-[10px] text-slate-500">
-                Key được lưu an toàn trên trình duyệt của bạn, không chia sẻ cho bên thứ ba.
-              </p>
+              <div className="relative">
+                <input
+                  type={showKeyPassword ? 'text' : 'password'}
+                  placeholder="Dán AIzaSy... để kích hoạt AI Vision đọc siêu chuẩn"
+                  value={geminiKeyInput}
+                  onChange={(e) => setGeminiKeyInput(e.target.value)}
+                  className="w-full p-2 pr-8 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono outline-none focus:border-indigo-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowKeyPassword(!showKeyPassword)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  {showKeyPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+              <div className="flex items-start gap-1 text-[10px] text-emerald-700 bg-emerald-50/70 p-1.5 rounded border border-emerald-100">
+                <Cloud className="w-3 h-3 shrink-0 mt-0.5 text-emerald-600" />
+                <span>
+                  Key này được lưu tự động trên <strong>Sheet cài đặt (cai_dat)</strong>. Khi bạn mở trên máy tính hoặc điện thoại khác, ứng dụng sẽ tự động tải key về dùng mà không cần nhập lại.
+                </span>
+              </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-1">
+            <div className="flex items-center justify-between pt-1">
+              <div className="text-[10px] text-slate-500 flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                <span>Tab sheet: <code>cai_dat</code></span>
+              </div>
               <button
                 type="button"
                 onClick={handleSaveApiKeys}
-                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer"
+                disabled={isSavingSettings}
+                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer inline-flex items-center gap-1.5 transition-all"
               >
-                Lưu cấu hình
+                {isSavingSettings ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Đang lưu lên Sheet...</span>
+                  </>
+                ) : (
+                  <span>Lưu cấu hình</span>
+                )}
               </button>
             </div>
           </div>
