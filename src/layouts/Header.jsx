@@ -149,28 +149,36 @@ export default function Header({
         <button
           type="button"
           onClick={triggerSync}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800 text-xs font-bold shadow-2xs transition-all cursor-pointer group"
+          className="flex items-center gap-1 sm:gap-1.5 p-2 sm:px-2.5 sm:py-1.5 rounded-xl border border-emerald-200 bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800 text-xs font-bold shadow-2xs transition-all cursor-pointer group shrink-0"
           title={`Đang kết nối Realtime với Google Sheets\n- Tự động quét ngầm: mỗi 25 giây\n- Tự làm mới: khi quay lại tab trình duyệt\n- Lần quét cuối: ${lastSyncTime ? new Date(lastSyncTime).toLocaleTimeString('vi-VN') : 'Vừa xong'}\n(Bấm vào đây để làm mới dữ liệu ngay)`}
         >
-          <span className="relative flex h-2 w-2">
+          <span className="relative flex h-2 w-2 shrink-0">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
           </span>
           <span className="hidden lg:inline">Đang kết nối Realtime với Google Sheets</span>
-          <span className="inline lg:hidden">Realtime</span>
-          <RefreshCcw className={`w-3.5 h-3.5 text-emerald-600 group-hover:rotate-180 transition-transform duration-300 ${isAutoSyncing ? 'animate-spin' : ''}`} />
+          <span className="hidden sm:inline lg:hidden">Realtime</span>
+          <RefreshCcw className={`w-3.5 h-3.5 text-emerald-600 group-hover:rotate-180 transition-transform duration-300 shrink-0 ${isAutoSyncing ? 'animate-spin' : ''}`} />
         </button>
 
         {/* Network & Offline Queue Indicator */}
-        <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold shadow-2xs transition-all ${isOnline ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
+        <div
+          className={`flex items-center gap-1 sm:gap-1.5 p-2 sm:px-2.5 sm:py-1.5 rounded-xl border text-xs font-bold shadow-2xs transition-all shrink-0 ${isOnline ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}
+          title={isOfflineSyncing ? 'Đang đồng bộ dữ liệu ngoại tuyến...' : isOnline ? (queueCount > 0 ? `Đang Online (${queueCount} đơn chờ đẩy)` : 'Đang Online') : `Mất kết nối Internet (${queueCount} đơn lưu tạm)`}
+        >
           {isOfflineSyncing ? (
-            <RefreshCcw className="w-4 h-4 animate-spin text-blue-600" />
+            <RefreshCcw className="w-3.5 h-3.5 animate-spin text-blue-600 shrink-0" />
           ) : isOnline ? (
-            <Wifi className="w-4 h-4" />
+            <Wifi className="w-3.5 h-3.5 shrink-0" />
           ) : (
-            <WifiOff className="w-4 h-4" />
+            <WifiOff className="w-3.5 h-3.5 shrink-0" />
           )}
-          <span>
+          {queueCount > 0 && (
+            <span className="inline sm:hidden text-[10px] font-bold text-amber-800 shrink-0">
+              {queueCount}
+            </span>
+          )}
+          <span className="hidden sm:inline">
             {isOfflineSyncing ? 'Đồng bộ...' : isOnline ? (queueCount > 0 ? `Đã online (${queueCount})` : 'Online') : `Offline (${queueCount})`}
           </span>
         </div>
@@ -181,10 +189,10 @@ export default function Header({
         <button
           type="button"
           onClick={() => openSettings('columns', activeModule)}
-          className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border border-blue-200 bg-blue-50/70 hover:bg-blue-100/80 text-blue-700 transition-all text-xs font-bold shadow-2xs group"
+          className="flex items-center gap-1.5 p-2 sm:px-3 sm:py-1.5 rounded-xl border border-blue-200 bg-blue-50/70 hover:bg-blue-100/80 text-blue-700 transition-all text-xs font-bold shadow-2xs group shrink-0"
           title="Mở Cài đặt hệ thống, cỡ chữ & kích thước cột"
         >
-          <Settings className="w-4 h-4 text-blue-600 group-hover:rotate-45 transition-transform duration-300" />
+          <Settings className="w-4 h-4 text-blue-600 group-hover:rotate-45 transition-transform duration-300 shrink-0" />
           <span className="hidden sm:inline">Cài đặt</span>
         </button>
 
