@@ -1901,7 +1901,7 @@ export default function HHShopDienPage() {
                                     </span>
                                   )}
                                 </div>
-                                <div className="font-mono text-xs font-bold text-slate-800 break-all">
+                                <div className="font-mono text-xs font-bold text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis" title={code}>
                                   {code}
                                 </div>
                               </div>

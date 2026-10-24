@@ -988,62 +988,66 @@ export default function QRScannerModal({
                       return (
                         <div
                           key={idx}
-                          className="bg-white border border-slate-200 hover:border-indigo-300 rounded-xl p-3 flex items-center justify-between gap-2 shadow-xs transition-all"
+                          className="bg-white border border-slate-200 hover:border-indigo-300 rounded-xl p-2 sm:p-2.5 flex items-center justify-between gap-1.5 sm:gap-2 shadow-xs transition-all"
                         >
-                          <div className="space-y-0.5 min-w-0">
-                            <div className="flex items-center gap-1.5">
+                          <div className="flex-1 min-w-0 pr-1">
+                            <div className="flex items-center gap-1.5 mb-0.5">
                               {isMvd && (
-                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-700 border border-indigo-200">
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 border border-indigo-200 shrink-0">
                                   Mã Vận Đơn
                                 </span>
                               )}
                               {isMdh && !isMvd && (
-                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-700 border border-amber-200">
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200 shrink-0">
                                   Mã Đơn
                                 </span>
                               )}
                               {isSku && (
-                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-700 border border-emerald-200">
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 border border-emerald-200 shrink-0">
                                   SKU
                                 </span>
                               )}
                             </div>
-                            <div className="font-mono text-sm font-bold text-slate-900 tracking-wide break-all">
+                            <div
+                              onClick={() => handleCopy(code)}
+                              className="font-mono text-xs sm:text-sm font-bold text-slate-900 tracking-tight sm:tracking-wide whitespace-nowrap overflow-hidden text-ellipsis cursor-pointer hover:text-indigo-600 transition-colors"
+                              title={`${code} (Chạm để sao chép)`}
+                            >
                               {code}
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
                             <button
                               type="button"
                               onClick={() => handleCopy(code)}
-                              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 transition-all ${
+                              className={`p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg text-xs font-medium flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer ${
                                 copiedCode === code
                                   ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
                                   : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
                               }`}
-                              title="Sao chép mã"
+                              title={copiedCode === code ? 'Đã sao chép' : 'Sao chép mã'}
                             >
                               {copiedCode === code ? (
                                 <>
-                                  <Check className="w-3.5 h-3.5 text-emerald-600" />
-                                  <span>Đã chép</span>
+                                  <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                  <span className="hidden sm:inline">Đã chép</span>
                                 </>
                               ) : (
                                 <>
-                                  <Copy className="w-3.5 h-3.5" />
-                                  <span>Sao chép</span>
+                                  <Copy className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                                  <span className="hidden sm:inline">Sao chép</span>
                                 </>
                               )}
                             </button>
                             <button
                               type="button"
                               onClick={() => handleApply(code)}
-                              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1 shadow-xs transition-all cursor-pointer"
-                              title="Điền mã này vào tìm kiếm"
+                              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center gap-1 shadow-xs transition-all active:scale-95 cursor-pointer"
+                              title="Dùng mã này"
                             >
-                              <span>Dùng mã</span>
-                              <ArrowRight className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">Dùng mã</span>
+                              <ArrowRight className="w-3.5 h-3.5 shrink-0" />
                             </button>
                           </div>
                         </div>
