@@ -1528,6 +1528,24 @@ export default function HangHoanDrawer({
 
         {/* Drawer Sticky Bottom Footer */}
         <div className="p-2.5 sm:p-3 border-t border-slate-200 flex items-center gap-2 bg-white shrink-0 sticky bottom-0 z-20 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
+          {mode === 'edit' && !isKinhDoanh && (
+            <button
+              type="button"
+              onClick={() => onDelete(initialData)}
+              className="px-3 py-2 bg-rose-50 border border-rose-200 text-rose-600 font-bold rounded-lg hover:bg-rose-100 active:bg-rose-200 transition-all text-sm shrink-0"
+            >
+              Xóa
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 border border-slate-200 text-slate-600 font-bold rounded-lg hover:bg-slate-50 transition-all text-sm shrink-0"
+          >
+            Hủy
+          </button>
+
           <button
             type="button"
             onClick={handleSubmit}
@@ -1542,24 +1560,6 @@ export default function HangHoanDrawer({
             ) : (
               <span>{mode === 'create' || mode === 'copy' ? 'Thêm mới' : 'Lưu thay đổi'}</span>
             )}
-          </button>
-
-          {mode === 'edit' && !isKinhDoanh && (
-            <button
-              type="button"
-              onClick={() => onDelete(initialData)}
-              className="px-3 py-2 bg-rose-50 border border-rose-200 text-rose-600 font-bold rounded-lg hover:bg-rose-100 active:bg-rose-200 transition-all text-sm"
-            >
-              Xóa
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 border border-slate-200 text-slate-600 font-bold rounded-lg hover:bg-slate-50 transition-all text-sm"
-          >
-            Hủy
           </button>
         </div>
       </div>
