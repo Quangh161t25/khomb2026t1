@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Home,
+  Smartphone,
   ChevronRight,
   PanelLeft,
   Settings,
@@ -21,6 +22,7 @@ import NotificationPopover from '../components/common/NotificationPopover';
 import { useSync } from '../context/SyncContext';
 import { syncOfflineQueue, getOfflineQueue } from '../services/offlineSync';
 import { appendSheetData } from '../services/googleSheetsApi';
+import InstallPwaModal from '../components/common/InstallPwaModal';
 
 export default function Header({
   activeModule,
@@ -37,6 +39,7 @@ export default function Header({
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isOfflineSyncing, setIsOfflineSyncing] = useState(false);
   const [queueCount, setQueueCount] = useState(0);
+  const [showInstallModal, setShowInstallModal] = useState(false);
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -185,6 +188,17 @@ export default function Header({
 
         <NotificationPopover />
 
+        {/* Dedicated "Cài App" Button */}
+        <button
+          type="button"
+          onClick={() => setShowInstallModal(true)}
+          className="flex items-center gap-1.5 p-2 sm:px-2.5 sm:py-1.5 rounded-xl border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100/80 text-indigo-700 transition-all text-xs font-bold shadow-2xs group shrink-0"
+          title="Cài đặt App UPMISA trên điện thoại (Android & iPhone)"
+        >
+          <Smartphone className="w-4 h-4 text-indigo-600 group-hover:scale-110 transition-transform shrink-0" />
+          <span className="hidden md:inline">Cài App</span>
+        </button>
+
         {/* Dedicated "Cài đặt" Button */}
         <button
           type="button"
@@ -318,6 +332,29 @@ export default function Header({
 
               <div className="my-1 border-t border-slate-100" />
 
+              {/* Cài đặt App Điện Thoại */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAccountMenuOpen(false);
+                    setShowInstallModal(true);
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-xs font-semibold text-slate-700 hover:text-indigo-600 hover:bg-indigo-50 transition-colors group"
+                >
+                  <div className="p-2 rounded-lg bg-indigo-100 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                    <Smartphone className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <p className="font-bold text-slate-800 group-hover:text-indigo-600">Cài đặt App Điện Thoại</p>
+                      <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.2 rounded font-bold">App</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-normal truncate">Cài trên Android & iPhone</p>
+                  </div>
+                </button>
+
+              <div className="my-1 border-t border-slate-100" />
+
               {/* 4. Đăng xuất */}
               <div className="p-1.5">
                 <button
@@ -341,6 +378,11 @@ export default function Header({
           )}
         </div>
       </div>
+      {/* Install PWA Modal */}
+      <InstallPwaModal
+        isOpen={showInstallModal}
+        onClose={() => setShowInstallModal(false)}
+      />
     </header>
   );
 }
