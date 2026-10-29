@@ -128,6 +128,7 @@ export default function DonHangPage() {
   // Detail Drawer Modal
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerItem, setDrawerItem] = useState(null);
+  const [drawerSkuCtFocused, setDrawerSkuCtFocused] = useState(false);
   const [editFormData, setEditFormData] = useState({
     so_luong: '',
     don_gia_1: '',
@@ -150,15 +151,53 @@ export default function DonHangPage() {
       ]);
 
       if (spRows && spRows.length > 1) {
-        setSanphamData(
-          spRows.slice(1).map((r) => ({
-            id_sp: (r[1] || '').toString().trim(),
-            sku_con: (r[2] || '').toString().trim(),
-            ten_sp: (r[3] || '').toString().trim(),
-            gia_ban: parseFloat(r[6]) || 0,
-            gia_nhap: parseFloat(r[7]) || 0,
-          }))
-        );
+        const headers = spRows[0].map((h) => (h || '').toString().toLowerCase().trim());
+        const findIdx = (names) => {
+          for (const name of names) {
+            const idx = headers.indexOf(name.toLowerCase());
+            if (idx !== -1) return idx;
+          }
+          return -1;
+        };
+
+        const idxSkuCon = findIdx(['mã', 'sku_con', 'sku con', 'id_sp_con', 'mã sku con']);
+        const idxIdSp = findIdx(['mã sp cha', 'id_sp', 'mã cha', 'id sp', 'sku_cha', 'sku cha']);
+        const idxTen = findIdx(['tên', 'ten_sp', 'tên sản phẩm', 'tên sp']);
+        const idxGiaBan = findIdx(['giá bán lẻ', 'gia_ban', 'giá bán', 'giá bán thấp nhất']);
+        const idxGiaNhap = findIdx(['giá nhập', 'gia_nhap']);
+
+        const parsedSp = spRows
+          .slice(1)
+          .map((r) => {
+            let skuCon = (idxSkuCon !== -1 ? r[idxSkuCon] : r[0]) || '';
+            let idSp = (idxIdSp !== -1 ? r[idxIdSp] : r[1]) || '';
+            let tenSp = (idxTen !== -1 ? r[idxTen] : r[2]) || '';
+
+            skuCon = skuCon.toString().trim().toUpperCase();
+            idSp = idSp.toString().trim().toUpperCase();
+            tenSp = tenSp.toString().trim();
+
+            // Tự động kiểm tra độ dài: SKU con luôn > 5 hoặc chứa '-', Mã cha ngắn hơn (<= 5)
+            if (skuCon.length <= 5 && idSp.length > 5) {
+              const temp = skuCon;
+              skuCon = idSp;
+              idSp = temp;
+            }
+
+            const giaBan = idxGiaBan !== -1 ? parseFloat(r[idxGiaBan]) || 0 : parseFloat(r[4]) || parseFloat(r[6]) || 0;
+            const giaNhap = idxGiaNhap !== -1 ? parseFloat(r[idxGiaNhap]) || 0 : parseFloat(r[3]) || parseFloat(r[7]) || 0;
+
+            return {
+              id_sp: idSp,
+              sku_con: skuCon,
+              ten_sp: tenSp,
+              gia_ban: giaBan,
+              gia_nhap: giaNhap,
+            };
+          })
+          .filter((item) => item.sku_con !== '' || item.id_sp !== '');
+
+        setSanphamData(parsedSp);
       }
 
       if (udctRows && udctRows.length > 1) {
@@ -706,10 +745,12 @@ export default function DonHangPage() {
       don_gia_1: item.don_gia_1 || '',
       id_sp: item.id_sp || '',
       id_sp_ct: item.id_sp_ct || '',
+      ten_sp: item.ten_sp || '',
       tinh_trang: item.tinh_trang || 'Chờ xác nhận',
       trang_thai: item.trang_thai || '',
       ghi_chu: item.ghi_chu || '',
     });
+    setDrawerSkuCtFocused(false);
     setDrawerOpen(true);
   };
 
@@ -725,6 +766,7 @@ export default function DonHangPage() {
       { range: `${CONFIG.udctSheetName}!O${drawerItem.rowIndex}`, values: [[editFormData.so_luong]] },
       { range: `${CONFIG.udctSheetName}!P${drawerItem.rowIndex}`, values: [[editFormData.id_sp]] },
       { range: `${CONFIG.udctSheetName}!Q${drawerItem.rowIndex}`, values: [[editFormData.id_sp_ct]] },
+      { range: `${CONFIG.udctSheetName}!R${drawerItem.rowIndex}`, values: [[editFormData.ten_sp || drawerItem.ten_sp || '']] },
       { range: `${CONFIG.udctSheetName}!S${drawerItem.rowIndex}`, values: [[nextSlgXuat]] },
       { range: `${CONFIG.udctSheetName}!X${drawerItem.rowIndex}`, values: [[editFormData.tinh_trang]] },
       { range: `${CONFIG.udctSheetName}!Y${drawerItem.rowIndex}`, values: [[editFormData.trang_thai]] },
@@ -742,6 +784,7 @@ export default function DonHangPage() {
                 ...editFormData,
                 so_luong: parseFloat(editFormData.so_luong) || 0,
                 don_gia_1: parseFloat(editFormData.don_gia_1) || 0,
+                ten_sp: editFormData.ten_sp || r.ten_sp,
                 slg_xuat: nextSlgXuat,
               }
             : r
@@ -762,16 +805,76 @@ export default function DonHangPage() {
     setEditFormData((prev) => {
       const next = { ...prev, [field]: value };
       if (field === 'id_sp_ct') {
-        const sp = sanphamData.find((s) => (s.sku_con || '').toLowerCase() === (value || '').toLowerCase());
+        const val = (value || '').trim();
+        const sp = sanphamData.find(
+          (s) => (s.sku_con || '').toLowerCase() === val.toLowerCase()
+        );
         if (sp) {
           next.id_sp = sp.id_sp || (sp.sku_con || '').substring(0, 4);
+          if (sp.ten_sp) next.ten_sp = sp.ten_sp;
           if (sp.gia_ban > 0) next.don_gia_1 = sp.gia_ban;
+        } else if (val.includes('-')) {
+          const prefix = val.split('-')[0].trim().toUpperCase();
+          if (prefix && prefix.length <= 5) {
+            next.id_sp = prefix;
+          }
         }
       }
       return next;
     });
 
     if (!isKinhDoanh || field === 'ghi_chu') {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = setTimeout(() => {
+        handleSaveDrawer(true);
+      }, 600);
+    }
+  };
+
+  // Autocomplete Suggestions cho ID SP CT (SKU Con) trong Drawer
+  const drawerSkuCtSuggestions = useMemo(() => {
+    if (!drawerOpen) return [];
+    const query = (editFormData.id_sp_ct || '').trim().toLowerCase();
+    const currentMacha = (editFormData.id_sp || '').trim().toLowerCase();
+
+    // 1. Nếu có gõ từ khóa tìm kiếm (theo mã SKU con, mã cha hoặc tên SP)
+    if (query) {
+      return sanphamData
+        .filter((s) => {
+          const matchCon = (s.sku_con || '').toLowerCase().includes(query);
+          const matchCha = (s.id_sp || '').toLowerCase().includes(query);
+          const matchTen = (s.ten_sp || '').toLowerCase().includes(query);
+          return matchCon || matchCha || matchTen;
+        })
+        .slice(0, 30);
+    }
+
+    // 2. Nếu ô SKU con trống nhưng đã có Mã cha: hiện danh sách SKU con của mã cha đó
+    if (currentMacha) {
+      return sanphamData
+        .filter((s) =>
+          (s.id_sp || '').toLowerCase() === currentMacha ||
+          (s.sku_con || '').toLowerCase().startsWith(currentMacha)
+        )
+        .slice(0, 30);
+    }
+
+    // 3. Mặc định hiển thị danh sách sản phẩm mẫu từ DS_SP
+    return sanphamData.slice(0, 25);
+  }, [drawerOpen, editFormData.id_sp_ct, editFormData.id_sp, sanphamData]);
+
+  // Chọn SKU Con từ gợi ý trong Drawer: tự động ăn theo Mã Cha, Tên Sản Phẩm và Đơn Giá
+  const handleSelectDrawerSkuCon = (sp) => {
+    setEditFormData((prev) => ({
+      ...prev,
+      id_sp_ct: sp.sku_con,
+      id_sp: sp.id_sp || (sp.sku_con || '').substring(0, 4),
+      ten_sp: sp.ten_sp || prev.ten_sp,
+      don_gia_1: sp.gia_ban > 0 ? sp.gia_ban : prev.don_gia_1,
+    }));
+    setDrawerSkuCtFocused(false);
+
+    if (!isKinhDoanh) {
       clearTimeout(autoSaveTimerRef.current);
       autoSaveTimerRef.current = setTimeout(() => {
         handleSaveDrawer(true);
@@ -1895,10 +1998,13 @@ export default function DonHangPage() {
                 <span className="text-slate-500">Gian hàng:</span>
                 <span className="font-bold text-slate-800">{drawerItem.ma_gian}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Tên sản phẩm:</span>
-                <span className="font-semibold text-slate-800 text-right truncate max-w-[200px]" title={drawerItem.ten_sp}>
-                  {drawerItem.ten_sp || 'Chưa có tên'}
+              <div className="flex justify-between items-start gap-2">
+                <span className="text-slate-500 shrink-0">Tên sản phẩm:</span>
+                <span
+                  className="font-semibold text-slate-800 text-right truncate max-w-[220px]"
+                  title={editFormData.ten_sp || drawerItem.ten_sp}
+                >
+                  {editFormData.ten_sp || drawerItem.ten_sp || 'Chưa có tên'}
                 </span>
               </div>
             </div>
@@ -1939,36 +2045,110 @@ export default function DonHangPage() {
                     className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none font-bold focus:ring-2 focus:ring-primary/20 disabled:bg-slate-100"
                   />
                 </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">ID SP CT (SKU Con)</label>
-                  <input
-                    type="text"
-                    disabled={isKinhDoanh}
-                    value={editFormData.id_sp_ct}
-                    onChange={(e) => handleDrawerFieldChange('id_sp_ct', e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none font-bold text-blue-600 focus:ring-2 focus:ring-primary/20 disabled:bg-slate-100"
-                  />
+                <div className="relative">
+                  <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                    <span>ID SP CT (SKU Con)</span>
+                    <span className="text-[10px] text-blue-600 font-semibold">Gợi ý từ DS_SP</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      disabled={isKinhDoanh}
+                      value={editFormData.id_sp_ct}
+                      onFocus={() => setDrawerSkuCtFocused(true)}
+                      onBlur={() => setTimeout(() => setDrawerSkuCtFocused(false), 250)}
+                      onChange={(e) => {
+                        setDrawerSkuCtFocused(true);
+                        handleDrawerFieldChange('id_sp_ct', e.target.value);
+                      }}
+                      placeholder="Gõ hoặc chọn SKU con..."
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none font-bold text-blue-600 focus:ring-2 focus:ring-primary/20 disabled:bg-slate-100"
+                    />
+                    {editFormData.id_sp_ct && !isKinhDoanh && (
+                      <button
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          handleDrawerFieldChange('id_sp_ct', '');
+                          setDrawerSkuCtFocused(true);
+                        }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Autocomplete Dropdown popup từ DS_SP */}
+                  {drawerSkuCtFocused && !isKinhDoanh && drawerSkuCtSuggestions.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto divide-y divide-slate-100">
+                      <div className="sticky top-0 bg-slate-50 px-3 py-1.5 text-[10px] font-bold text-slate-500 flex items-center justify-between border-b border-slate-100">
+                        <span>DS_SP ({drawerSkuCtSuggestions.length}):</span>
+                        <span className="text-blue-600">Bấm để tự điền Mã cha & Tên</span>
+                      </div>
+                      {drawerSkuCtSuggestions.map((sp, idx) => (
+                        <div
+                          key={`${sp.sku_con}-${idx}`}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            handleSelectDrawerSkuCon(sp);
+                          }}
+                          className="p-2.5 hover:bg-blue-50/80 active:bg-blue-100 cursor-pointer transition-colors"
+                        >
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="font-mono font-bold text-blue-700 text-xs">{sp.sku_con}</span>
+                            {sp.id_sp && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-bold border border-slate-200 shrink-0">
+                                Cha: {sp.id_sp}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-600 truncate mt-0.5" title={sp.ten_sp}>
+                            {sp.ten_sp || '(Chưa có tên)'}
+                          </div>
+                          {sp.gia_ban > 0 && (
+                            <div className="text-[10px] text-emerald-600 font-semibold mt-0.5">
+                              Giá: {Number(sp.gia_ban).toLocaleString('vi-VN')} đ
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* SKU con suggestions pills inside drawer */}
-              {editFormData.id_sp && !isKinhDoanh && (
+              {!isKinhDoanh && (
                 <div className="space-y-1">
-                  <span className="text-[11px] text-slate-500 font-semibold">Gợi ý SKU con theo mã cha:</span>
-                  <div className="flex flex-wrap gap-1">
+                  <span className="text-[11px] text-slate-500 font-semibold">
+                    {editFormData.id_sp
+                      ? `Gợi ý SKU con theo mã cha [${editFormData.id_sp}]:`
+                      : 'Gợi ý SKU con phổ biến từ DS_SP:'}
+                  </span>
+                  <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
                     {sanphamData
-                      .filter(
-                        (s) =>
-                          (s.id_sp || '').toLowerCase() === editFormData.id_sp.toLowerCase() &&
-                          (s.sku_con || '').length > 5
-                      )
-                      .slice(0, 8)
+                      .filter((s) => {
+                        if (editFormData.id_sp) {
+                          return (
+                            (s.id_sp || '').toLowerCase() === editFormData.id_sp.toLowerCase() &&
+                            (s.sku_con || '').length > 5
+                          );
+                        }
+                        return (s.sku_con || '').length > 5;
+                      })
+                      .slice(0, 12)
                       .map((s) => (
                         <button
                           key={s.sku_con}
                           type="button"
-                          onClick={() => handleDrawerFieldChange('id_sp_ct', s.sku_con)}
-                          className="px-2 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded text-[11px] font-bold hover:bg-blue-100"
+                          onClick={() => handleSelectDrawerSkuCon(s)}
+                          className={`px-2 py-1 rounded text-[11px] font-bold border transition-colors ${
+                            editFormData.id_sp_ct === s.sku_con
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                              : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                          }`}
+                          title={`${s.sku_con} - ${s.ten_sp}`}
                         >
                           {s.sku_con}
                         </button>
