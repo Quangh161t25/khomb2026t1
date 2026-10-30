@@ -111,7 +111,7 @@ export default function UpMisaPage() {
     if (san === 'shopee') prefix = (kh === '10H' ? 'N ' : '') + 'SPE';
     else if (san === 'lazada') prefix = 'LDZ';
     else if (san === 'best') prefix = 'BEST';
-    else if (san === 'tiktok') prefix = 'TT';
+    else if (san === 'tiktok' || san === 'ticktok') prefix = 'TT';
     else if (san === 'đơn ngoài') prefix = 'XDN';
 
     const mg = (item.ma_gian || '').trim();
