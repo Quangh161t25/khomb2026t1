@@ -151,13 +151,13 @@ export default function UpMisaPage() {
       '', // Hàng KM
       '131', // TK Nợ
       '5111', // TK Có
-      'Cái', // ĐVT
+      '', // ĐVT
       item.slg_xuat || '', // Số lượng
       '', // Đơn giá sau thuế
       item.don_gia_1 || '', // Đơn giá
       ((item.don_gia_1 || 0) * (item.slg_xuat || 0)) || '', // Thành tiền
       '', '', '', '', '', '', '', '', '', '', '', // Thuế & CK
-      'K' + (item.mien || '').toUpperCase(), // Kho
+      (item.mien || '').toUpperCase() === 'MB' ? 'KHH' : 'K' + (item.mien || '').toUpperCase(), // Kho
       '632', // TK Giá vốn
       '1561', // TK Kho
       '', '', '' // Khác
@@ -282,7 +282,7 @@ export default function UpMisaPage() {
           <table className="w-full text-left border-collapse text-xs">
             <thead className="bg-slate-100 text-slate-700 text-xs font-bold uppercase sticky top-0 z-10 whitespace-nowrap select-none shadow-2xs">
               <tr>
-                {misaHeaders.slice(0, 15).map((h, i) => {
+                {misaHeaders.map((h, i) => {
                   const isCenter = [0, 1, 2, 3, 4, 5, 6, 7, 11, 12, 14].includes(i);
                   return (
                     <th
@@ -300,14 +300,14 @@ export default function UpMisaPage() {
             <tbody className="divide-y divide-slate-100">
               {paginatedMisa.length === 0 ? (
                 <tr>
-                  <td colSpan={15} className="text-center py-12 text-slate-400">
+                  <td colSpan={misaHeaders.length} className="text-center py-12 text-slate-400">
                     Không có dữ liệu MISA phù hợp.
                   </td>
                 </tr>
               ) : (
                 paginatedMisa.map((row, idx) => (
                   <tr key={idx} className="hover:bg-slate-50 transition-colors whitespace-nowrap">
-                    {row.slice(0, 15).map((cell, cIdx) => {
+                    {row.map((cell, cIdx) => {
                       const isCenter = [0, 1, 2, 3, 4, 5, 6, 7, 11, 12, 14].includes(cIdx);
                       const isMono = [8, 9, 13].includes(cIdx);
                       return (
