@@ -208,23 +208,7 @@ export default function HangHoanFilter(props) {
     <div className="p-2.5 sm:p-3 border-b border-slate-200 bg-white rounded-2xl shadow-xs relative">
       {/* Main Toolbar */}
       <div className="flex flex-wrap items-center gap-2 lg:gap-3">
-        {/* 1. Số đơn */}
-        <div className="text-[11px] font-bold text-slate-600 uppercase tracking-tight bg-slate-100 px-2.5 py-1.5 rounded-lg border border-slate-200 shrink-0">
-          <span className="hidden sm:inline">SỐ ĐƠN: </span>{Number(count).toLocaleString('vi-VN')}
-        </div>
-
-        {/* 2. Load */}
-        <button
-          type="button"
-          onClick={handleRefresh}
-          disabled={loading}
-          className="p-1.5 lg:p-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors border border-slate-200/60 cursor-pointer shrink-0"
-          title="Tải lại dữ liệu"
-        >
-          <RotateCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-        </button>
-
-        {/* 3. Tìm kiếm */}
+        {/* 1. Tìm kiếm */}
         <div className="relative flex-1 min-w-[200px] lg:min-w-[250px]">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
@@ -255,6 +239,22 @@ export default function HangHoanFilter(props) {
             </button>
           </div>
         </div>
+
+        {/* 2. Số đơn */}
+        <div className="text-[11px] font-bold text-slate-600 uppercase tracking-tight bg-slate-100 px-2.5 py-1.5 rounded-lg border border-slate-200 shrink-0">
+          <span className="hidden sm:inline">SỐ ĐƠN: </span>{Number(count).toLocaleString('vi-VN')}
+        </div>
+
+        {/* 3. Load */}
+        <button
+          type="button"
+          onClick={handleRefresh}
+          disabled={loading}
+          className="p-1.5 lg:p-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors border border-slate-200/60 cursor-pointer shrink-0"
+          title="Tải lại dữ liệu"
+        >
+          <RotateCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+        </button>
 
         {/* 4. Ngày (Single Stepper) */}
         <div className="flex items-center shrink-0">
