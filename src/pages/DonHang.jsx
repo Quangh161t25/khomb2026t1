@@ -888,7 +888,49 @@ export default function DonHangPage() {
       <div className="bg-white rounded-xl shadow-xs border border-slate-200 p-3 space-y-3">
         {/* Row 1: Time, Search, Counts & Primary Actions */}
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 flex-1">
+            {/* Search Input with integrated Camera QR icon */}
+            <div className="relative min-w-[200px] lg:min-w-[260px] flex-1">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck="false"
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
+                placeholder="Tìm MVD, MDH, SKU..."
+                className="w-full pl-8 pr-16 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-primary/20 font-medium focus:bg-white transition-all"
+              />
+              <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchTerm('');
+                      setCurrentPage(1);
+                    }}
+                    className="p-1 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                    title="Xóa tìm kiếm"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setScannerOpen(true)}
+                  className="p-1 text-slate-400 hover:text-indigo-600 transition-colors cursor-pointer"
+                  title="Quét mã QR / Barcode tìm đơn"
+                >
+                  <Camera className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
             {/* Quick Date Presets */}
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs font-bold">
               <button
@@ -1020,47 +1062,6 @@ export default function DonHangPage() {
                 <option key={id} value={id} />
               ))}
             </datalist>
-
-            {/* Search Input with QR Scan */}
-            <div className="relative min-w-[200px] flex-1 flex items-center gap-1">
-              <div className="relative flex-1">
-                <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => {
-                    setSearchTerm(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  placeholder="Tìm MVD, MDH, SKU... (hoặc quét QR)"
-                  className="w-full pl-8 pr-7 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-primary/20 font-medium"
-                />
-                {searchTerm && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSearchTerm('');
-                      setCurrentPage(1);
-                    }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
-                    title="Xóa tìm kiếm"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
-
-              {/* QR Scan Button */}
-              <button
-                type="button"
-                onClick={() => setScannerOpen(true)}
-                className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 font-bold rounded-lg text-xs flex items-center gap-1 shrink-0 shadow-2xs transition-colors cursor-pointer"
-                title="Mở camera quét mã QR / Barcode tìm đơn"
-              >
-                <Camera className="w-3.5 h-3.5 text-indigo-600" />
-                <span className="hidden sm:inline">Quét QR</span>
-              </button>
-            </div>
           </div>
 
           {/* Badges: Dòng & MVD + View Mode Toggle */}
