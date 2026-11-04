@@ -121,6 +121,7 @@ export const MODULE_COLUMNS_CONFIG = {
   hh_shop_dien: {
     label: 'Hàng hoàn shop điền',
     columns: [
+      { key: 'ok', label: 'OK', defaultWidth: 70, minWidth: 60, align: 'center' },
       { key: 'ngay_tra', label: 'Ngày trả sàn', defaultWidth: 100, minWidth: 70, align: 'center' },
       { key: 'doi_soat', label: 'Trạng thái kho', defaultWidth: 135, minWidth: 90, align: 'center', isVirtual: true },
       { key: 'mvd', label: 'Mã vận đơn', defaultWidth: 160, minWidth: 90, align: 'left' },
@@ -129,6 +130,7 @@ export const MODULE_COLUMNS_CONFIG = {
       { key: 'sku', label: 'SKU Shop', defaultWidth: 130, minWidth: 70, align: 'left' },
       { key: 'ten_sp', label: 'Tên sản phẩm', defaultWidth: 180, minWidth: 90, align: 'left' },
       { key: 'mvd_tra', label: 'MVD Hoàn', defaultWidth: 150, minWidth: 80, align: 'left' },
+      { key: 'mdh_tra', label: 'MDH Trả', defaultWidth: 150, minWidth: 80, align: 'left' },
       { key: 'sku_tra', label: 'SKU Hoàn', defaultWidth: 120, minWidth: 70, align: 'left' },
       { key: 'sl', label: 'Số lượng', defaultWidth: 65, minWidth: 45, align: 'right' },
       { key: 'hoan_tra', label: 'Loại', defaultWidth: 75, minWidth: 50, align: 'center' },
@@ -678,7 +680,13 @@ export function ColumnWidthProvider({ children }) {
           colMap.delete(k);
         }
       });
-      colMap.forEach((c) => ordered.push(c));
+      // Cột mới chưa có trong thứ tự đã lưu: chèn theo vị trí trong config (ngay sau cột đứng trước nó)
+      config.columns.forEach((c, i) => {
+        if (!colMap.has(c.key)) return;
+        const prevKey = i > 0 ? config.columns[i - 1].key : null;
+        const prevIdx = prevKey ? ordered.findIndex((o) => o.key === prevKey) : -1;
+        ordered.splice(prevIdx + 1, 0, c);
+      });
       return ordered;
     },
     [columnOrder]

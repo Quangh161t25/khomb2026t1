@@ -5,6 +5,7 @@ import { useColumnWidths } from '../context/ColumnWidthContext';
 import ResizableTh from '../components/common/ResizableTh';
 import ImagePreviewModal from '../components/common/ImagePreviewModal';
 import QRScannerModal from '../components/common/QRScannerModal';
+import SkuSuggestInput from '../components/common/SkuSuggestInput';
 import { CONFIG } from '../config/config';
 import {
   fetchSheetData,
@@ -73,6 +74,7 @@ export default function HHShopDienPage() {
   const [shopData, setShopData] = useState([]);
   const [hhbhData, setHhbhData] = useState([]);
   const [udctData, setUdctData] = useState([]);
+  const [sanphamData, setSanphamData] = useState([]); // DS_SP - gợi ý SKU, chỉ tải khi mở form
   const [loading, setLoading] = useState(false);
 
   // Filters
@@ -91,6 +93,7 @@ export default function HHShopDienPage() {
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [batchInputText, setBatchInputText] = useState('');
   const [batchSaving, setBatchSaving] = useState(false);
+  const [selectedKeys, setSelectedKeys] = useState([]); // Các dòng tích chọn để xóa
 
   // Single Entry Form State
   const [formData, setFormData] = useState({
@@ -102,6 +105,7 @@ export default function HHShopDienPage() {
     sku: '',
     ten_sp: '',
     mvd_tra: '',
+    mdh_tra: '',
     sku_tra: '',
     sl: '1',
     hoan_tra: 'Hoàn',
@@ -130,18 +134,19 @@ export default function HHShopDienPage() {
   const [showOcrBox, setShowOcrBox] = useState(false);
   const [selectedOcrEngine, setSelectedOcrEngine] = useState(getPreferredOcrEngine);
   const fileInputRef = useRef(null);
+  const headerFixedRef = useRef(false);
 
   // 1. Tải toàn bộ dữ liệu (HH_SHOP_DIEN, HH_BH, UD_CT)
   const loadData = useCallback(async (isSilent = false) => {
     if (!isSilent) setLoading(true);
     try {
       const [shopRows, hhbhRows, udctRows] = await Promise.all([
-        fetchSheetData(`${CONFIG.hhShopDienSheetName}!A:P`),
+        fetchSheetData(`${CONFIG.hhShopDienSheetName}!A:R`),
         fetchSheetData(`${CONFIG.hhbhSheetName}!A:Z`),
         fetchSheetData(`${CONFIG.udctSheetName}!A:R`),
       ]);
 
-      // Parse HH_SHOP_DIEN (16 columns: id, ngay_tao, ngay_tra, mvd, mdh, ma_gian, sku, ten_sp, mvd_tra, sku_tra, sl, hoan_tra, ghi_chu, xac_nhan, nguoi_nhap, anh)
+      // Parse HH_SHOP_DIEN (18 columns: id, ngay_tao, ngay_tra, mvd, mdh, ma_gian, sku, ten_sp, mvd_tra, sku_tra, sl, hoan_tra, ghi_chu, xac_nhan, nguoi_nhap, anh, ok, mdh_tra)
       if (shopRows && shopRows.length > 1) {
         const parsedShop = shopRows.slice(1).map((row, idx) => ({
           rowIndex: idx + 2,
@@ -161,8 +166,19 @@ export default function HHShopDienPage() {
           xac_nhan: (row[13] || '').toString().trim(),
           nguoi_nhap: (row[14] || '').toString().trim(),
           anh: (row[15] || '').toString().trim(),
+          ok: (row[16] || '').toString().trim().toUpperCase() === 'OK',
+          mdh_tra: (row[17] || '').toString().trim(),
         }));
         setShopData(parsedShop);
+
+        // Bổ sung tiêu đề cột Q (OK) và R (MDH Trả) nếu sheet chưa có
+        const header = shopRows[0] || [];
+        if (!headerFixedRef.current && (!header[16] || !header[17])) {
+          headerFixedRef.current = true;
+          batchUpdateSheetValues([
+            { range: `${CONFIG.hhShopDienSheetName}!Q1:R1`, values: [['OK', 'MDH Trả']] },
+          ]);
+        }
       } else {
         setShopData([]);
       }
@@ -225,6 +241,45 @@ export default function HHShopDienPage() {
 
   // Tự động đồng bộ ngầm
   useAutoSync(loadData, { sheetName: CONFIG.hhShopDienSheetName });
+
+  // Tải DS_SP để gợi ý SKU và lấy tên sản phẩm cho cột Kho thực tế
+  useEffect(() => {
+    if (sanphamData.length) return;
+    fetchSheetData(CONFIG.sanphamSheetName)
+      .then((rows) => {
+        if (!rows || rows.length <= 1) return;
+        const seen = new Set();
+        const parsed = [];
+        rows.slice(1).forEach((row) => {
+          const c0 = (row[0] || '').toString().trim();
+          const c1 = (row[1] || '').toString().trim();
+          // SKU CT luôn dài > 5, SKU cha <= 5
+          let skuCt = c0;
+          let skuCha = c1;
+          if (c0.length <= 5 && c1.length > 5) {
+            skuCt = c1;
+            skuCha = c0;
+          }
+          const key = skuCt.toUpperCase();
+          if (!skuCt || seen.has(key)) return;
+          seen.add(key);
+          parsed.push({ sku_ct: skuCt, sku: skuCha, ten_sp: (row[2] || '').toString().trim() });
+        });
+        setSanphamData(parsed);
+      })
+      .catch((e) => console.error('Lỗi tải DS_SP:', e));
+  }, [sanphamData.length]);
+
+  // Tra tên sản phẩm theo SKU (CT hoặc cha) từ DS_SP
+  const spNameMap = useMemo(() => {
+    const map = new Map();
+    sanphamData.forEach((p) => {
+      if (!p.ten_sp) return;
+      map.set(p.sku_ct.toUpperCase(), p.ten_sp);
+      if (p.sku && !map.has(p.sku.toUpperCase())) map.set(p.sku.toUpperCase(), p.ten_sp);
+    });
+    return map;
+  }, [sanphamData]);
 
   // 2. Map tra cứu nhanh Hàng Hoàn Kho (`HH_BH`) theo MVD & MVD_2
   const hhbhMap = useMemo(() => {
@@ -356,13 +411,21 @@ export default function HHShopDienPage() {
         if (doiSoatFilter === 'LECH_HANG' && item.doi_soat_status !== 'LECH_HANG') return false;
 
         if (searchTerm) {
-          const text = `${item.mvd} ${item.mdh} ${item.ma_gian} ${item.sku} ${item.ten_sp} ${item.mvd_tra} ${item.sku_tra} ${item.ghi_chu}`;
+          const text = `${item.mvd} ${item.mdh} ${item.ma_gian} ${item.sku} ${item.ten_sp} ${item.mvd_tra} ${item.mdh_tra} ${item.sku_tra} ${item.ghi_chu}`;
           if (!matchMultiKeyword(text, searchTerm)) return false;
         }
 
         return true;
       })
-      .sort((a, b) => b.rowIndex - a.rowIndex);
+      // Không có ngày trả sàn lên đầu, sau đó ngày trả sàn mới → cũ
+      .sort((a, b) => {
+        const da = toYMD(a.ngay_tra) || '';
+        const db = toYMD(b.ngay_tra) || '';
+        if (!da && db) return -1;
+        if (da && !db) return 1;
+        if (da !== db) return db.localeCompare(da);
+        return b.rowIndex - a.rowIndex;
+      });
   }, [reconciledData, fromDate, toDate, maGianFilter, doiSoatFilter, searchTerm]);
 
   // 4. Tra cứu tự động từ UD_CT khi gõ MVD hoặc MDH
@@ -624,6 +687,7 @@ export default function HHShopDienPage() {
       sku: '',
       ten_sp: '',
       mvd_tra: '',
+      mdh_tra: '',
       sku_tra: '',
       sl: '1',
       hoan_tra: 'Hoàn',
@@ -654,6 +718,7 @@ export default function HHShopDienPage() {
       sku: item.sku || '',
       ten_sp: item.ten_sp || '',
       mvd_tra: item.mvd_tra || '',
+      mdh_tra: item.mdh_tra || '',
       sku_tra: item.sku_tra || item.sku || '',
       sl: item.sl || '1',
       hoan_tra: item.hoan_tra || 'Hoàn',
@@ -686,7 +751,9 @@ export default function HHShopDienPage() {
       return;
     }
 
-    if (!formData.mvd_tra || !formData.mvd_tra.trim()) {
+    // Đơn Hoàn (chuyển hoàn) không bắt buộc MVD Hoàn, chỉ đơn Trả mới bắt buộc
+    const isHoan = (formData.hoan_tra || 'Hoàn').toLowerCase() === 'hoàn';
+    if (!isHoan && (!formData.mvd_tra || !formData.mvd_tra.trim())) {
       showToast('Vui lòng nhập Mã vận đơn Hoàn/Trả (MVD Trả)!', 'warning');
       return;
     }
@@ -710,6 +777,8 @@ export default function HHShopDienPage() {
       formData.xac_nhan || 'CHỜ XÁC NHẬN',
       formData.nguoi_nhap || user?.name || '',
       formData.anh || '',
+      '',
+      (formData.mdh_tra || '').trim(),
     ];
 
     if (drawerMode === 'create') {
@@ -739,6 +808,7 @@ export default function HHShopDienPage() {
         { range: `${CONFIG.hhShopDienSheetName}!M${rowIndex}`, values: [[formData.ghi_chu]] },
         { range: `${CONFIG.hhShopDienSheetName}!N${rowIndex}`, values: [[formData.xac_nhan]] },
         { range: `${CONFIG.hhShopDienSheetName}!P${rowIndex}`, values: [[formData.anh || '']] },
+        { range: `${CONFIG.hhShopDienSheetName}!R${rowIndex}`, values: [[(formData.mdh_tra || '').trim()]] },
       ];
 
       try {
@@ -750,6 +820,65 @@ export default function HHShopDienPage() {
         console.error('Error updating HH Shop:', err);
         showToast('Lỗi khi cập nhật: ' + err.message, 'error');
       }
+    }
+  };
+
+  // Kho tích / bỏ tích OK (cột Q)
+  const handleToggleOk = async (item) => {
+    if (['kinhdoanh', 'demo'].includes((user?.role || '').toLowerCase())) {
+      showToast('Chỉ tài khoản KHO mới được tích OK.', 'warning');
+      return;
+    }
+    const next = !item.ok;
+    setShopData((prev) => prev.map((r) => (r.rowIndex === item.rowIndex ? { ...r, ok: next } : r)));
+    const saved = await batchUpdateSheetValues([
+      { range: `${CONFIG.hhShopDienSheetName}!Q${item.rowIndex}`, values: [[next ? 'OK' : '']] },
+    ]);
+    if (!saved) {
+      setShopData((prev) => prev.map((r) => (r.rowIndex === item.rowIndex ? { ...r, ok: !next } : r)));
+      showToast('Lỗi khi lưu OK lên sheet!', 'error');
+    }
+  };
+
+  // Chọn nhiều dòng để xóa (theo id, để không lệch khi sheet tải lại)
+  const rowKey = (item) => item.id || `row-${item.rowIndex}`;
+  const toggleSelected = (item) => {
+    const k = rowKey(item);
+    setSelectedKeys((prev) => (prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]));
+  };
+
+  const handleDeleteSelected = async () => {
+    if (!selectedKeys.length) return;
+    if (['kinhdoanh', 'demo'].includes((user?.role || '').toLowerCase())) {
+      showToast('Tài khoản này không có quyền xóa.', 'error');
+      return;
+    }
+    const rowIndexes = shopData
+      .filter((r) => selectedKeys.includes(rowKey(r)))
+      .map((r) => r.rowIndex)
+      .sort((a, b) => b - a); // Xóa từ dưới lên để không lệch dòng
+    if (!rowIndexes.length) {
+      setSelectedKeys([]);
+      return;
+    }
+    if (!window.confirm(`Xóa ${rowIndexes.length} dòng đã chọn? Hành động này không thể hoàn tác!`)) return;
+
+    setLoading(true);
+    try {
+      let failed = 0;
+      for (const rowIndex of rowIndexes) {
+        const ok = await deleteSheetRow(CONFIG.hhShopDienSheetName, rowIndex);
+        if (!ok) failed++;
+      }
+      if (failed) showToast(`Đã xóa ${rowIndexes.length - failed} dòng, lỗi ${failed} dòng!`, 'warning');
+      else showToast(`Đã xóa ${rowIndexes.length} dòng!`, 'success');
+    } catch (err) {
+      console.error('Error deleting selected HH Shop:', err);
+      showToast('Lỗi khi xóa: ' + err.message, 'error');
+    } finally {
+      setSelectedKeys([]);
+      setLoading(false);
+      loadData(true);
     }
   };
 
@@ -827,6 +956,8 @@ export default function HHShopDienPage() {
           'CHỜ XÁC NHẬN',
           user?.name || 'Shop',
           '',
+          '',
+          '',
         ]);
       });
 
@@ -850,6 +981,7 @@ export default function HHShopDienPage() {
       return;
     }
     const headers = [
+      'OK',
       'Ngày trả sàn',
       'Trạng thái kho',
       'Mã vận đơn',
@@ -858,6 +990,7 @@ export default function HHShopDienPage() {
       'SKU',
       'Tên sản phẩm',
       'MVD Trả',
+      'MDH Trả',
       'SKU Trả',
       'SL',
       'Loại',
@@ -868,20 +1001,23 @@ export default function HHShopDienPage() {
       'Link ảnh',
     ];
     const rows = filteredData.map((r) => [
+      r.ok ? 'OK' : '',
       formatYmdToDmy(r.ngay_tra) || r.ngay_tra,
-      r.doi_soat_status === 'DA_NHAN'
+      (r.ok ? 'OK - ' : '') +
+      (r.doi_soat_status === 'DA_NHAN'
         ? 'Đã nhận kho'
         : r.doi_soat_status === 'LECH_HANG'
         ? 'Lệch SKU'
         : r.is_overdue
         ? `Chưa nhận (${r.days_waiting} ngày - Quá hạn)`
-        : `Chưa nhận (${r.days_waiting} ngày)`,
+        : `Chưa nhận (${r.days_waiting} ngày)`),
       r.mvd,
       r.mdh,
       r.ma_gian,
       r.sku,
       r.ten_sp,
       r.mvd_tra,
+      r.mdh_tra,
       r.sku_tra,
       r.sl,
       r.hoan_tra,
@@ -898,6 +1034,34 @@ export default function HHShopDienPage() {
   // Render individual cell based on dynamic columnKey
   const renderCell = (colKey, item, kho, firstKhoPhoto) => {
     switch (colKey) {
+      case 'ok':
+        return (
+          <td
+            key={colKey}
+            className="px-2 py-2 text-center whitespace-nowrap"
+            style={colStyle('ok', 70, 'center')}
+            onClick={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => e.stopPropagation()}
+          >
+            <div className="inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={!!item.ok}
+                onChange={() => handleToggleOk(item)}
+                className="w-4 h-4 accent-emerald-600 cursor-pointer align-middle"
+                title={item.ok ? 'Kho đã xác nhận OK - bấm để bỏ' : 'Kho tích để xác nhận OK'}
+              />
+              <input
+                type="checkbox"
+                checked={selectedKeys.includes(rowKey(item))}
+                onChange={() => toggleSelected(item)}
+                className="w-4 h-4 accent-rose-600 cursor-pointer align-middle"
+                title="Chọn để xóa"
+              />
+            </div>
+          </td>
+        );
+
       case 'ngay_tra':
         return (
           <td
@@ -916,7 +1080,16 @@ export default function HHShopDienPage() {
             className="px-3 py-2 text-center whitespace-nowrap overflow-hidden text-ellipsis"
             style={colStyle('doi_soat', 135, 'center')}
           >
-            {item.doi_soat_status === 'DA_NHAN' ? (
+            {item.ok ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                OK{item.doi_soat_status === 'DA_NHAN'
+                  ? ' - Đã nhận kho'
+                  : item.doi_soat_status === 'LECH_HANG'
+                  ? ' - Lệch SKU'
+                  : ''}
+              </span>
+            ) : item.doi_soat_status === 'DA_NHAN' ? (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                 Đã nhận kho
@@ -1017,6 +1190,18 @@ export default function HHShopDienPage() {
           </td>
         );
 
+      case 'mdh_tra':
+        return (
+          <td
+            key={colKey}
+            className="px-3 py-2 text-left font-mono text-slate-600 whitespace-nowrap overflow-hidden text-ellipsis"
+            style={colStyle('mdh_tra', 150, 'left')}
+            title={item.mdh_tra}
+          >
+            {item.mdh_tra || '-'}
+          </td>
+        );
+
       case 'sku_tra':
         return (
           <td
@@ -1065,6 +1250,14 @@ export default function HHShopDienPage() {
                 <span className="font-semibold text-slate-900" title={kho.sku_ct || kho.sku}>
                   {kho.sku_ct || kho.sku || 'Đã nhận'}
                 </span>
+                {(() => {
+                  const tenSp = kho.ten_sp || spNameMap.get((kho.sku_ct || kho.sku || '').toUpperCase()) || '';
+                  return tenSp ? (
+                    <span className="text-slate-600 truncate" title={tenSp}>
+                      {tenSp}
+                    </span>
+                  ) : null;
+                })()}
                 <span className="text-slate-400 text-[10px]">
                   {kho.kho ? `[${kho.kho}] ` : ''}{formatYmdToDmy(kho.ngay_nhan) || kho.ngay_nhan || ''} {kho.id_nv ? `(${kho.id_nv})` : ''}
                 </span>
@@ -1258,6 +1451,16 @@ export default function HHShopDienPage() {
               <Plus className="w-4 h-4" />
               <span>Thêm 1 đơn</span>
             </button>
+
+            {selectedKeys.length > 0 && (
+              <button
+                onClick={handleDeleteSelected}
+                className="px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-[0.99] text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Xóa ({selectedKeys.length})</span>
+              </button>
+            )}
 
             <button
               onClick={() => setIsBatchModalOpen(true)}
@@ -1580,10 +1783,17 @@ export default function HHShopDienPage() {
                   </div>
                 ) : (
                   /* Nếu đơn chỉ có 1 SP hoặc nhập tay */
-                  <input
-                    type="text"
+                  <SkuSuggestInput
                     value={formData.sku}
-                    onChange={(e) => setFormData({ ...formData, sku: e.target.value.toUpperCase() })}
+                    products={sanphamData}
+                    onChange={(v) => setFormData((prev) => ({ ...prev, sku: v }))}
+                    onSelect={(p) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        ten_sp: prev.ten_sp || p.ten_sp,
+                        sku_tra: prev.sku_tra || p.sku_ct,
+                      }))
+                    }
                     placeholder="SKU sản phẩm gửi..."
                     className="w-full p-2 bg-white border border-slate-200 rounded-xl font-mono font-bold text-indigo-700 uppercase outline-none"
                   />
@@ -1606,14 +1816,30 @@ export default function HHShopDienPage() {
               <div>
                 <label className="block font-bold text-slate-800 mb-1 flex items-center gap-1">
                   <span>Mã vận đơn Hoàn (MVD Hoàn)</span>
-                  <span className="text-rose-500">*</span>
+                  {formData.hoan_tra.toLowerCase() !== 'hoàn' && <span className="text-rose-500">*</span>}
                 </label>
                 <input
                   type="text"
                   value={formData.mvd_tra}
                   onChange={(e) => setFormData({ ...formData, mvd_tra: e.target.value.toUpperCase() })}
-                  placeholder="MVD hoàn / MVD chiều về (bắt buộc)..."
+                  placeholder={
+                    formData.hoan_tra.toLowerCase() === 'hoàn'
+                      ? 'MVD hoàn / MVD chiều về (không bắt buộc)...'
+                      : 'MVD hoàn / MVD chiều về (bắt buộc)...'
+                  }
                   className="w-full p-2 bg-white border border-slate-200 focus:border-indigo-500 rounded-xl font-mono font-semibold text-slate-800 outline-none uppercase"
+                />
+              </div>
+
+              {/* MDH TRẢ */}
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">Mã đơn hàng Trả (MDH Trả)</label>
+                <input
+                  type="text"
+                  value={formData.mdh_tra}
+                  onChange={(e) => setFormData({ ...formData, mdh_tra: e.target.value })}
+                  placeholder="MDH trả hàng..."
+                  className="w-full p-2 bg-white border border-slate-200 focus:border-indigo-500 rounded-xl font-mono font-semibold text-slate-800 outline-none"
                 />
               </div>
 
@@ -1621,10 +1847,10 @@ export default function HHShopDienPage() {
               <div className="grid grid-cols-[1fr_90px] gap-2.5">
                 <div>
                   <label className="block font-bold text-slate-800 mb-1">SKU Hoàn</label>
-                  <input
-                    type="text"
+                  <SkuSuggestInput
                     value={formData.sku_tra}
-                    onChange={(e) => setFormData({ ...formData, sku_tra: e.target.value.toUpperCase() })}
+                    products={sanphamData}
+                    onChange={(v) => setFormData((prev) => ({ ...prev, sku_tra: v }))}
                     placeholder="SKU hoàn về..."
                     className="w-full p-2 bg-white border border-slate-200 rounded-xl font-mono uppercase font-semibold text-slate-800 outline-none"
                   />
