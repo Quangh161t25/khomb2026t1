@@ -220,7 +220,8 @@ export async function fetchSheetData(sheetNameOrRange, customRange = null, force
 }
 
 export async function fetchAuthData() {
-  const data = await fetchSheetData(CONFIG.authSheetName);
+  // Luôn tải mới khi đăng nhập để nhận ngay mật khẩu vừa đổi trên sheet (không dùng cache 15 phút)
+  const data = await fetchSheetData(CONFIG.authSheetName, null, true);
   if (!data || data.length <= 1) return [];
 
   const headers = data[0].map(h => (h || '').toString().trim().toLowerCase());
@@ -235,7 +236,7 @@ export async function fetchAuthData() {
     id: (idxId !== -1 ? row[idxId] : row[0] || '').toString().trim(),
     name: (idxHoten !== -1 ? row[idxHoten] : row[1] || '').toString().trim(),
     role: (idxQuyen !== -1 ? row[idxQuyen] : '').toString().trim().toLowerCase() || 'user',
-    password: (idxMatKhau !== -1 ? row[idxMatKhau] : '').toString(),
+    password: (idxMatKhau !== -1 ? row[idxMatKhau] : '').toString().trim(),
     tinhTrang: (idxTinhTrang !== -1 ? row[idxTinhTrang] : '').toString().trim(),
     raw: row
   })).filter(user => user.id && user.password);
