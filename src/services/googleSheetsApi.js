@@ -232,12 +232,18 @@ export async function fetchAuthData() {
   const idxMatKhau = getIndex('mat_khau');
   const idxTinhTrang = getIndex('tinhtrang');
 
+  // Google Sheets cắt bỏ ô trống cuối dòng, nên row[i] có thể undefined
+  const cell = (row, idx, fallbackIdx = -1) => {
+    const i = idx !== -1 ? idx : fallbackIdx;
+    return i === -1 ? '' : (row[i] ?? '').toString().trim();
+  };
+
   return data.slice(1).map(row => ({
-    id: (idxId !== -1 ? row[idxId] : row[0] || '').toString().trim(),
-    name: (idxHoten !== -1 ? row[idxHoten] : row[1] || '').toString().trim(),
-    role: (idxQuyen !== -1 ? row[idxQuyen] : '').toString().trim().toLowerCase() || 'user',
-    password: (idxMatKhau !== -1 ? row[idxMatKhau] : '').toString().trim(),
-    tinhTrang: (idxTinhTrang !== -1 ? row[idxTinhTrang] : '').toString().trim(),
+    id: cell(row, idxId, 0),
+    name: cell(row, idxHoten, 1),
+    role: cell(row, idxQuyen).toLowerCase() || 'user',
+    password: cell(row, idxMatKhau),
+    tinhTrang: cell(row, idxTinhTrang),
     raw: row
   })).filter(user => user.id && user.password);
 }
